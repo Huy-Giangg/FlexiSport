@@ -3,8 +3,11 @@ import 'package:flexisport_app/features/auth/presentation/widgets/button_custom.
 import 'package:flexisport_app/features/auth/presentation/widgets/input_text_custom.dart';
 import 'package:flexisport_app/features/auth/services/auth_services.dart';
 import 'package:flexisport_app/features/auth/utils/validators.dart';
+import 'package:flexisport_app/features/home/presentation/providers/main_page_provider.dart';
+import 'package:flexisport_app/features/booking/presentation/providers/booking_sync_service.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:provider/provider.dart';
 
 class RegisterPage extends StatefulWidget {
   const RegisterPage({super.key});
@@ -292,16 +295,23 @@ class _RegisterPageState extends State<RegisterPage> {
         final user = await _authService.registerWithEmail(
           _emailController.text.trim(),
           _passwordController.text.trim(),
+          name: _nameController.text.trim(),
         );
 
         if (user != null) {
-          // 3. Đăng ký thành công
-          ScaffoldMessenger.of(
-            context,
-          ).showSnackBar(const SnackBar(content: Text('Đăng ký thành công!')));
+          // Đồng bộ lịch đặt vãng lai sang tài khoản mới đăng ký
+          await BookingSyncService.syncGuestBookings(user.id);
 
-          // Chuyển hướng sang trang chủ hoặc trang đăng nhập
-          context.go('/login');
+          // 3. Đăng ký thành công
+          if (mounted) {
+            ScaffoldMessenger.of(
+              context,
+            ).showSnackBar(const SnackBar(content: Text('Đăng ký thành công!')));
+
+            // Chuyển hướng sang trang chủ và hiện navbar
+            context.read<MainPageProvider>().showNavbar();
+            context.go('/home');
+          }
         }
       } catch (e) {
         // 4. Hiển thị lỗi nếu Firebase trả về lỗi

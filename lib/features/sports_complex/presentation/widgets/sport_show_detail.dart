@@ -1,5 +1,7 @@
 import 'package:flexisport_app/core/theme/app_colors.dart';
+import 'package:flexisport_app/core/utils/location_helper.dart';
 import 'package:flexisport_app/features/sports_complex/domain/entities/sports_complex_entity.dart';
+import 'package:flexisport_app/features/sports_complex/presentation/providers/sports_complex_provider.dart';
 import 'package:flexisport_app/features/sports_complex/presentation/widgets/booking_visual_card.dart';
 import 'package:flexisport_app/features/sports_complex/presentation/widgets/tabs/tab_images_widget.dart';
 import 'package:flexisport_app/features/sports_complex/presentation/widgets/tabs/tab_info_widget.dart';
@@ -7,6 +9,7 @@ import 'package:flexisport_app/features/sports_complex/presentation/widgets/tabs
 import 'package:flexisport_app/features/sports_complex/presentation/widgets/tabs/tab_rules_widget.dart';
 import 'package:flexisport_app/features/sports_complex/presentation/widgets/tabs/tab_services_widget.dart';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
 class SportShowDetail extends StatelessWidget {
   final SportsComplexEntity sportsComplexEntity;
@@ -30,6 +33,11 @@ class SportShowDetail extends StatelessWidget {
       maxChildSize: 1.0, // kéo lên full màn hình
       expand: false,
       builder: (context, scrollController) {
+        final provider = context.watch<SportsComplexProvider>();
+        final isFavorite = provider.favoriteStadiumIds.contains(
+          sportsComplexEntity.id,
+        );
+
         return Container(
           width: double.infinity,
           decoration: BoxDecoration(
@@ -44,15 +52,10 @@ class SportShowDetail extends StatelessWidget {
                 Column(
                   children: [
                     // Đặt chiều cao cho Image để dễ canh Positioned
-                    Image.asset(
-                      'assets/images/banner/san1.jpg',
-                      height: 280,
-                      width: double.infinity,
-                      fit: BoxFit.cover,
-                    ),
+                    _buildLogoImage(sportsComplexEntity.logoUrl),
 
                     // Dành khoảng trống cho cái thẻ Positioned đè xuống
-                    const SizedBox(height: 160),
+                    const SizedBox(height: 190),
 
                     // Phần TabBar & TabBarView cần có chiều cao cố định
                     Container(
@@ -85,9 +88,11 @@ class SportShowDetail extends StatelessWidget {
                                   TabImagesWidget(
                                     stadiumId: sportsComplexEntity.id,
                                   ),
-                                  
+
                                   TabRulesWidget(),
-                                  TabReviewsWidget(),
+                                  TabReviewsWidget(
+                                    venueId: sportsComplexEntity.id,
+                                  ),
                                 ],
                               ),
                             ),
@@ -100,7 +105,7 @@ class SportShowDetail extends StatelessWidget {
 
                 Positioned(
                   top:
-                      220, // Nằm đè lên một phần của Image và khoảng trống SizedBox ở trên
+                      130, // Nằm đè lên một phần của Image và khoảng trống SizedBox ở trên
                   left: 16,
                   right: 16,
                   child: Container(
@@ -142,53 +147,49 @@ class SportShowDetail extends StatelessWidget {
                                 mainAxisAlignment: MainAxisAlignment.center,
                                 children: [
                                   const SizedBox(height: 20),
-                                  Text(
-                                    sportsComplexEntity.name,
-                                    style: TextStyle(
-                                      color: AppColors.primaryBlack,
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 4),
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 8,
-                                      vertical: 4,
-                                    ),
-                                    decoration: BoxDecoration(
-                                      color: Colors.blueAccent.withOpacity(0.1),
-                                      borderRadius: BorderRadius.circular(12),
-                                      border: Border.all(
-                                        width: 1,
-                                        color: Colors.blueAccent,
-                                      ),
-                                    ),
-                                    child: Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        Image.asset(
-                                          'assets/images/icon_sport/ic_pickleball.png',
-                                          height: 16,
-                                          width: 16,
-                                          errorBuilder:
-                                              (context, error, stackTrace) =>
-                                                  Icon(
-                                                    Icons.sports_tennis,
-                                                    size: 16,
-                                                    color: Colors.blue,
-                                                  ),
+                                  Row(
+                                    children: [
+                                      Text(
+                                        sportsComplexEntity.name,
+                                        style: TextStyle(
+                                          color: AppColors.primaryBlack,
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.bold,
                                         ),
-                                        const SizedBox(width: 4),
-                                        Text(
-                                          "Pickleball",
-                                          style: TextStyle(
-                                            fontSize: 12,
-                                            color: Colors.blueAccent,
+                                      ),
+
+                                      const SizedBox(width: 8),
+
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 8,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          color: Colors.greenAccent.shade700,
+                                          borderRadius: BorderRadius.circular(
+                                            12,
                                           ),
                                         ),
-                                      ],
-                                    ),
+                                        child: Row(
+                                          children: [
+                                            Icon(
+                                              Icons.star,
+                                              color: Colors.amber,
+                                            ),
+                                            const SizedBox(width: 2),
+                                            Text(
+                                              sportsComplexEntity.rating
+                                                  .toString(),
+                                              style: TextStyle(fontSize: 14, color: Colors.white),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 4),
+                                  _buildSportTag(
+                                    sportsComplexEntity.sportsType,
                                   ),
                                 ],
                               ),
@@ -218,13 +219,27 @@ class SportShowDetail extends StatelessWidget {
                             ),
                             const SizedBox(width: 8),
                             Expanded(
-                              child: Text(
-                                sportsComplexEntity.address,
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  color: AppColors.onPrimaryContainer,
-                                  fontWeight: FontWeight.w500,
-                                ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    sportsComplexEntity.address,
+                                    style: TextStyle(
+                                      fontSize: 14,
+                                      color: AppColors.onPrimaryContainer,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    "Khoảng cách: ${LocationHelper.formatDistance(LocationHelper.calculateDistanceFromDefault(sportsComplexEntity.latitude, sportsComplexEntity.longitude))}",
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: Colors.green[700],
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
                           ],
@@ -295,36 +310,7 @@ class SportShowDetail extends StatelessWidget {
                 ),
 
                 Positioned(
-                  top: 196,
-                  left: 0,
-                  right: 0,
-                  child: Center(
-                    child: Container(
-                      padding: const EdgeInsets.all(8),
-                      width: 200,
-                      decoration: BoxDecoration(
-                        color: Colors.greenAccent.shade700,
-                        borderRadius: BorderRadius.circular(24),
-                      ),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Image.asset('assets/images/icon/star.png'),
-
-                          const SizedBox(width: 4),
-
-                          Text(
-                            "5.0 (3 đánh giá)",
-                            style: TextStyle(color: Colors.white, fontSize: 16),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-
-                Positioned(
-                  top: 140,
+                  top: 50,
                   left: 10,
                   right: 10,
                   child: Row(
@@ -348,31 +334,34 @@ class SportShowDetail extends StatelessWidget {
 
                       const Spacer(),
 
-                      Container(
-                        padding: const EdgeInsets.all(10),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(100),
-                        ),
-                        child: Image.asset(
-                          'assets/images/location.png',
-                          scale: 0.8,
-                          color: AppColors.primaryContainer,
-                        ),
-                      ),
-
                       const SizedBox(width: 12),
 
-                      Container(
-                        padding: const EdgeInsets.all(10),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(100),
-                        ),
-                        child: Image.asset(
-                          'assets/images/heart.png',
-                          scale: 0.8,
-                          color: AppColors.primaryContainer,
+                      GestureDetector(
+                        onTap: () {
+                          context.read<SportsComplexProvider>().toggleFavorite(
+                            sportsComplexEntity.id,
+                          );
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(100),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.2),
+                                blurRadius: 6,
+                                offset: const Offset(2, 2),
+                              ),
+                            ],
+                          ),
+                          child: Icon(
+                            isFavorite ? Icons.favorite : Icons.favorite_border,
+                            color: isFavorite
+                                ? Colors.red
+                                : AppColors.primaryContainer,
+                            size: 20,
+                          ),
                         ),
                       ),
 
@@ -407,4 +396,152 @@ class SportShowDetail extends StatelessWidget {
       },
     );
   }
+
+  Widget _buildLogoImage(String logoUrl) {
+    if (logoUrl.isEmpty) {
+      return _buildPlaceholder();
+    }
+    if (logoUrl.startsWith('http://') || logoUrl.startsWith('https://')) {
+      return Image.network(
+        logoUrl,
+        fit: BoxFit.cover,
+        width: double.infinity,
+        height: 200,
+        errorBuilder: (context, error, stackTrace) => _buildPlaceholder(),
+      );
+    }
+    return Image.asset(
+      logoUrl,
+      fit: BoxFit.cover,
+      width: double.infinity,
+      errorBuilder: (context, error, stackTrace) => _buildPlaceholder(),
+    );
+  }
+
+  Widget _buildPlaceholder() {
+    return Container(
+      color: Colors.grey[300],
+      width: double.infinity,
+      child: const Center(
+        child: Icon(Icons.image, size: 40, color: Colors.grey),
+      ),
+    );
+  }
+
+  Widget _buildSportTag(String? sportsType) {
+    final sportInfo = _getSportInfo(sportsType);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: sportInfo.color.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(width: 1, color: sportInfo.color),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (sportInfo.iconPath.isNotEmpty)
+            Image.asset(
+              sportInfo.iconPath,
+              height: 16,
+              width: 16,
+              errorBuilder: (context, error, stackTrace) => Icon(
+                sportInfo.fallbackIcon,
+                size: 16,
+                color: sportInfo.color,
+              ),
+            )
+          else
+            Icon(sportInfo.fallbackIcon, size: 16, color: sportInfo.color),
+          const SizedBox(width: 4),
+          Text(
+            sportInfo.name,
+            style: TextStyle(fontSize: 12, color: sportInfo.color),
+          ),
+        ],
+      ),
+    );
+  }
+
+  _SportInfo _getSportInfo(String? sportsType) {
+    final type = sportsType?.trim() ?? '';
+    final lowercaseType = type.toLowerCase();
+
+    if (lowercaseType.contains('pickleball')) {
+      return _SportInfo(
+        name: type.isNotEmpty ? type : 'Pickleball',
+        iconPath: 'assets/images/icon_sport/ic_pickleball.png',
+        fallbackIcon: Icons.sports_tennis,
+        color: Colors.blueAccent,
+      );
+    } else if (lowercaseType.contains('cầu lông') ||
+        lowercaseType.contains('badminton')) {
+      return _SportInfo(
+        name: type.isNotEmpty ? type : 'Cầu lông',
+        iconPath: 'assets/images/icon_sport/ic_badminton.png',
+        fallbackIcon: Icons.sports_tennis,
+        color: Colors.greenAccent,
+      );
+    } else if (lowercaseType.contains('bóng đá') ||
+        lowercaseType.contains('football') ||
+        lowercaseType.contains('soccer')) {
+      return _SportInfo(
+        name: type.isNotEmpty ? type : 'Bóng đá',
+        iconPath: 'assets/images/icon_sport/ic_football.png',
+        fallbackIcon: Icons.sports_soccer,
+        color: Colors.green,
+      );
+    } else if (lowercaseType.contains('tennis')) {
+      return _SportInfo(
+        name: type.isNotEmpty ? type : 'Tennis',
+        iconPath: 'assets/images/icon_sport/ic_tennis.png',
+        fallbackIcon: Icons.sports_tennis,
+        color: Colors.brown,
+      );
+    } else if (lowercaseType.contains('chuyền') ||
+        lowercaseType.contains('volleyball')) {
+      return _SportInfo(
+        name: type.isNotEmpty ? type : 'Bóng chuyền',
+        iconPath: 'assets/images/icon_sport/ic_voleball.png',
+        fallbackIcon: Icons.sports_volleyball,
+        color: Colors.yellow,
+      );
+    } else if (lowercaseType.contains('bóng rổ') ||
+        lowercaseType.contains('basketball')) {
+      return _SportInfo(
+        name: type.isNotEmpty ? type : 'Bóng rổ',
+        iconPath: 'assets/images/icon_sport/ic_basketball.png',
+        fallbackIcon: Icons.sports_basketball,
+        color: Colors.brown,
+      );
+    } else if (lowercaseType.contains('golf')) {
+      return _SportInfo(
+        name: type.isNotEmpty ? type : 'Golf',
+        iconPath: 'assets/images/icon_sport/ic_golf.png',
+        fallbackIcon: Icons.sports_golf,
+        color: Colors.teal,
+      );
+    }
+
+    return _SportInfo(
+      name: type.isNotEmpty ? type : 'Thể thao',
+      iconPath: '',
+      fallbackIcon: Icons.sports,
+      color: Colors.blueAccent,
+    );
+  }
+}
+
+class _SportInfo {
+  final String name;
+  final String iconPath;
+  final IconData fallbackIcon;
+  final Color color;
+
+  _SportInfo({
+    required this.name,
+    required this.iconPath,
+    required this.fallbackIcon,
+    required this.color,
+  });
 }

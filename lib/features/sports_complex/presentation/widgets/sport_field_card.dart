@@ -1,6 +1,8 @@
 import 'package:flexisport_app/core/theme/app_colors.dart';
+import 'package:flexisport_app/core/utils/location_helper.dart';
 import 'package:flexisport_app/features/home/presentation/providers/main_page_provider.dart';
 import 'package:flexisport_app/features/sports_complex/domain/entities/sports_complex_entity.dart';
+import 'package:flexisport_app/features/sports_complex/presentation/providers/sports_complex_provider.dart';
 import 'package:flexisport_app/features/sports_complex/presentation/widgets/booking_visual_card.dart';
 import 'package:flexisport_app/features/sports_complex/presentation/widgets/sport_show_detail.dart';
 import 'package:flutter/material.dart';
@@ -13,6 +15,11 @@ class SportFieldCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final provider = context.watch<SportsComplexProvider>();
+    final isFavorite = provider.favoriteStadiumIds.contains(
+      sportsComplexEntity.id,
+    );
+
     return GestureDetector(
       onTap: () {
         showSportDetail(context);
@@ -42,11 +49,7 @@ class SportFieldCard extends StatelessWidget {
                       topLeft: Radius.circular(12),
                       topRight: Radius.circular(12),
                     ),
-                    child: Image.asset(
-                      'assets/images/banner/san2.png',
-                      fit: BoxFit.cover,
-                      width: double.infinity,
-                    ),
+                    child: _buildLogoImage(sportsComplexEntity.logoUrl),
                   ),
 
                   Positioned(
@@ -71,34 +74,38 @@ class SportFieldCard extends StatelessWidget {
                             ],
                           ),
                         ),
-
+                        const SizedBox(width: 2),
                         Container(
                           padding: const EdgeInsets.symmetric(
                             horizontal: 8,
                             vertical: 2,
                           ),
                           decoration: BoxDecoration(
-                            color: AppColors.primaryContainer,
+                            color: Colors.white,
                             borderRadius: BorderRadius.circular(12),
                           ),
-                          child: Text(
-                            "Đơn ngày",
-                            style: TextStyle(color: Colors.white, fontSize: 14),
-                          ),
-                        ),
-
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 2,
-                          ),
-                          decoration: BoxDecoration(
-                            color: Colors.purpleAccent,
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: Text(
-                            "Sự kiện",
-                            style: TextStyle(color: Colors.white, fontSize: 14),
+                          child: Row(
+                            children: [
+                              Icon(
+                                Icons.directions_run,
+                                size: 14,
+                                color: Color(0xFF2E7D32),
+                              ),
+                              const SizedBox(width: 2),
+                              Text(
+                                LocationHelper.formatDistance(
+                                  LocationHelper.calculateDistanceFromDefault(
+                                    sportsComplexEntity.latitude,
+                                    sportsComplexEntity.longitude,
+                                  ),
+                                ),
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w500,
+                                  color: Color(0xFF2E7D32),
+                                ),
+                              ),
+                            ],
                           ),
                         ),
                       ],
@@ -110,43 +117,34 @@ class SportFieldCard extends StatelessWidget {
                     top: 8,
                     child: Row(
                       children: [
-                        Container(
-                          padding: const EdgeInsets.all(8),
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(100),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withOpacity(0.5),
-                                blurRadius: 10,
-                                offset: Offset(5, 5),
-                              ),
-                            ],
-                          ),
-                          child: Image.asset(
-                            'assets/images/heart.png',
-                            color: AppColors.primaryContainer,
-                          ),
-                        ),
-
-                        const SizedBox(width: 8),
-
-                        Container(
-                          padding: const EdgeInsets.all(8),
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(100),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withOpacity(0.5),
-                                blurRadius: 10,
-                                offset: Offset(5, 5),
-                              ),
-                            ],
-                          ),
-                          child: Image.asset(
-                            'assets/images/location.png',
-                            color: AppColors.primaryContainer,
+                        GestureDetector(
+                          onTap: () {
+                            context
+                                .read<SportsComplexProvider>()
+                                .toggleFavorite(sportsComplexEntity.id);
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(100),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withOpacity(0.2),
+                                  blurRadius: 6,
+                                  offset: const Offset(2, 2),
+                                ),
+                              ],
+                            ),
+                            child: Icon(
+                              isFavorite
+                                  ? Icons.favorite
+                                  : Icons.favorite_border,
+                              color: isFavorite
+                                  ? Colors.red
+                                  : AppColors.primaryContainer,
+                              size: 20,
+                            ),
                           ),
                         ),
                       ],
@@ -162,31 +160,32 @@ class SportFieldCard extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
                   Image.asset('assets/images/logo.png', height: 70, width: 70),
-
                   Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        sportsComplexEntity.name,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                  
-                        style: TextStyle(
-                          color: AppColors.primaryContainer,
-                          fontSize: 16,
-                          fontWeight: FontWeight.w500,
+                      SizedBox(
+                        width: MediaQuery.of(context).size.width * 0.5,
+                        child: Text(
+                          sportsComplexEntity.name,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        
+                          style: TextStyle(
+                            color: AppColors.primaryContainer,
+                            fontSize: 16,
+                            fontWeight: FontWeight.w500,
+                          ),
                         ),
                       ),
                       SizedBox(
-                        width: 250,
+                        width: MediaQuery.of(context).size.width * 0.5,
                         child: Text(
-                        
                           sportsComplexEntity.address,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           textAlign: TextAlign.start,
-                                          
+
                           style: TextStyle(fontSize: 12),
                         ),
                       ),
@@ -258,6 +257,36 @@ class SportFieldCard extends StatelessWidget {
       builder: (context) {
         return BookingVisualCard(venueId: sportsComplexEntity.id);
       },
+    );
+  }
+
+  Widget _buildLogoImage(String logoUrl) {
+    if (logoUrl.isEmpty) {
+      return _buildPlaceholder();
+    }
+    if (logoUrl.startsWith('http://') || logoUrl.startsWith('https://')) {
+      return Image.network(
+        logoUrl,
+        fit: BoxFit.cover,
+        width: double.infinity,
+        errorBuilder: (context, error, stackTrace) => _buildPlaceholder(),
+      );
+    }
+    return Image.asset(
+      logoUrl,
+      fit: BoxFit.cover,
+      width: double.infinity,
+      errorBuilder: (context, error, stackTrace) => _buildPlaceholder(),
+    );
+  }
+
+  Widget _buildPlaceholder() {
+    return Container(
+      color: Colors.grey[300],
+      width: double.infinity,
+      child: const Center(
+        child: Icon(Icons.image, size: 40, color: Colors.grey),
+      ),
     );
   }
 }

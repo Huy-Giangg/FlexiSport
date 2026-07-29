@@ -114,4 +114,50 @@ class MyValidators {
 
   return null;
 }
+
+  // Validator cho Số điện thoại Việt Nam
+  static String? validatePhone(String? value) {
+    if (value == null || value.trim().isEmpty) {
+      return 'Vui lòng nhập số điện thoại';
+    }
+    final phone = value.trim();
+    
+    // Regex cho SĐT Việt Nam: bắt đầu bằng 03, 05, 07, 08, 09 và theo sau bởi 8 chữ số
+    // Hoặc 9 chữ số nếu người dùng bỏ số 0 ở đầu do có mã quốc gia (+84)
+    final phoneRegExp = RegExp(r'^(0[35789]|3[5789])[0-9]{8}$');
+    if (!phoneRegExp.hasMatch(phone)) {
+      return 'Số điện thoại không hợp lệ (ví dụ: 0987654321 hoặc 987654321)';
+    }
+    return null;
+  }
+
+  // Validator cho Chiều cao (cm) - Không bắt buộc nhưng nếu nhập thì phải hợp lệ
+  static String? validateHeight(String? value) {
+    if (value == null || value.trim().isEmpty) {
+      return null; // Không bắt buộc
+    }
+    final height = double.tryParse(value.trim());
+    if (height == null) {
+      return 'Vui lòng nhập số hợp lệ';
+    }
+    if (height < 50 || height > 250) {
+      return 'Chiều cao phải từ 50cm đến 250cm';
+    }
+    return null;
+  }
+
+  // Validator cho Cân nặng (kg) - Không bắt buộc nhưng nếu nhập thì phải hợp lệ
+  static String? validateWeight(String? value) {
+    if (value == null || value.trim().isEmpty) {
+      return null; // Không bắt buộc
+    }
+    final weight = double.tryParse(value.trim());
+    if (weight == null) {
+      return 'Vui lòng nhập số hợp lệ';
+    }
+    if (weight < 20 || weight > 200) {
+      return 'Cân nặng phải từ 20kg đến 200kg';
+    }
+    return null;
+  }
 }

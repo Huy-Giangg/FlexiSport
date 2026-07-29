@@ -1,6 +1,6 @@
 {
-    "name": "flexisport_app",
-    "short_name": "flexisport_app",
+    "name": "FlexiSport",
+    "short_name": "FlexiSport",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",

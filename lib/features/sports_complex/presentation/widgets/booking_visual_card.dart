@@ -158,7 +158,7 @@ class _BookingVisualCardState extends State<BookingVisualCard> {
 
                   context.read<MainPageProvider>().hideNavbar();
 
-                  context.push('/bookingpage?venueId=${widget.venueId}');
+                  context.push('/EventBookingPage?venueId=${widget.venueId}');
                 });
               },
 

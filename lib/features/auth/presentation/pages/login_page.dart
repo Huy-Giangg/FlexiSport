@@ -2,8 +2,11 @@ import 'package:flexisport_app/features/auth/presentation/widgets/button_custom.
 import 'package:flexisport_app/features/auth/presentation/widgets/input_text_custom.dart';
 import 'package:flexisport_app/features/auth/services/auth_services.dart';
 import 'package:flexisport_app/features/auth/utils/validators.dart';
+import 'package:flexisport_app/features/home/presentation/providers/main_page_provider.dart';
+import 'package:flexisport_app/features/booking/presentation/providers/booking_sync_service.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:provider/provider.dart';
 
 import '../../../../core/theme/app_colors.dart';
 
@@ -28,6 +31,15 @@ class _LoginPageState extends State<LoginPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.backgroundLight,
+      appBar: AppBar(
+        backgroundColor: AppColors.backgroundLight,
+        leading: IconButton(
+          onPressed: () {
+            context.pop();
+          },
+          icon: Icon(Icons.arrow_back_ios_new),
+        ),
+      ),
       body: SafeArea(
         child: Stack(
           children: [
@@ -98,7 +110,7 @@ class _LoginPageState extends State<LoginPage> {
                                   textEditingController: _emailController,
                                   hintext: "abc@gmail.com",
                                   title: "Địa chỉ Email",
-                                  validator: MyValidators.validateEmail,
+                                  validator: null,
                                 ),
 
                                 const SizedBox(height: 12),
@@ -147,7 +159,7 @@ class _LoginPageState extends State<LoginPage> {
                                     ),
                                   ),
                                   obscureText: _isobscure,
-                                  validator: MyValidators.validatePassword,
+                                  validator: null,
                                 ),
                               ],
                             ),
@@ -214,9 +226,7 @@ class _LoginPageState extends State<LoginPage> {
 
                             children: [
                               GestureDetector(
-                                onTap: () {
-                                  ontap: _isLoading ? () {} : _handleGoogleSignIn();
-                                },
+                                onTap: _isLoading ? null : _handleGoogleSignIn,
                                 child: Image.asset(
                                   "assets/images/auth/google.png",
                                   height: 40,
@@ -301,13 +311,18 @@ class _LoginPageState extends State<LoginPage> {
         );
 
         if (user != null) {
-          // 3. Đăng nhập thành công
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Đăng nhập thành công!')),
-          );
+          // Đồng bộ lịch đặt vãng lai sang tài khoản mới đăng nhập
+          await BookingSyncService.syncGuestBookings(user.id);
 
-          // Chuyển hướng sang trang chủ hoặc trang đăng nhập
-          context.go('/home');
+          // 3. Đăng nhập thành công
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Đăng nhập thành công!')),
+            );
+            // Chuyển hướng sang trang chủ và hiện navbar
+            context.read<MainPageProvider>().showNavbar();
+            context.go('/home');
+          }
         }
       } catch (e) {
         // 4. Hiển thị lỗi nếu Firebase trả về lỗi
@@ -326,36 +341,47 @@ class _LoginPageState extends State<LoginPage> {
   }
 
   Future<void> _handleGoogleSignIn() async {
-  try {
-    setState(() {
-      _isLoading = true;
-    });
+    try {
+      setState(() {
+        _isLoading = true;
+      });
 
-    final user = await AuthService().signInWithGoogle();
+      final user = await AuthService().signInWithGoogle();
 
-    if (user == null) {
-      // Người dùng bấm cancel
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Bạn đã hủy đăng nhập")),
-      );
-      return;
+      if (user == null) {
+        // Người dùng bấm cancel
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text("Bạn đã hủy đăng nhập")));
+        return;
+      }
+
+      // ✅ Đăng nhập thành công
+      final displayName =
+          user.userMetadata?['full_name'] ??
+          user.userMetadata?['name'] ??
+          user.email ??
+          '';
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text("Xin chào $displayName!")));
+
+      // Đồng bộ lịch đặt vãng lai sang tài khoản mới đăng nhập
+      await BookingSyncService.syncGuestBookings(user.id);
+
+      if (mounted) {
+        context.read<MainPageProvider>().showNavbar();
+        context.go('/home');
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(e.toString())));
+      print(e.toString());
+    } finally {
+      setState(() {
+        _isLoading = false;
+      });
     }
-
-    // ✅ Đăng nhập thành công
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text("Xin chào ${user.displayName}!")),
-    );
-
-    context.push('/home');
-
-  } catch (e) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(e.toString())),
-    );
-  } finally {
-    setState(() {
-      _isLoading = false;
-    });
   }
-}
 }

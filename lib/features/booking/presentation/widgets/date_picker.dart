@@ -25,11 +25,17 @@ class _DatePickerButtonState extends State<DatePickerButton> {
   }
 
   Future<void> _selectDate(BuildContext context) async {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    
+    // Phòng ngừa trường hợp selectedDate truyền vào nằm ở quá khứ
+    final initialDate = widget.selectedDate.isBefore(today) ? today : widget.selectedDate;
+
     final DateTime? picked = await showDatePicker(
       context: context,
-      initialDate: widget.selectedDate,
-      firstDate: DateTime.now().subtract(const Duration(days: 365)),
-      lastDate: DateTime.now().add(const Duration(days: 365)),
+      initialDate: initialDate,
+      firstDate: today,
+      lastDate: today.add(const Duration(days: 365)),
       builder: (context, child) {
         return Theme(
           data: Theme.of(context).copyWith(
