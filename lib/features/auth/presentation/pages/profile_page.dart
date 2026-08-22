@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
-import 'package:flexisport_app/features/home/presentation/providers/main_page_provider.dart';
+import 'package:flexisport_app/features/customer/home/presentation/providers/main_page_provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flexisport_app/features/auth/services/auth_services.dart';
 

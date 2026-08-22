@@ -6,15 +6,24 @@ class AuthService {
   final GoogleSignIn _googleSignIn = GoogleSignIn();
 
   // Hàm đăng ký tài khoản mới
-  Future<User?> registerWithEmail(String email, String password, {String? name}) async {
+  Future<User?> registerWithEmail(
+    String email,
+    String password, {
+    String? name,
+    String role = 'customer',
+  }) async {
     try {
       final AuthResponse result = await _auth.signUp(
         email: email,
         password: password,
-        data: name != null ? {'full_name': name, 'name': name} : null,
+        data: {
+          if (name != null) 'full_name': name,
+          if (name != null) 'name': name,
+          'role': role,
+        },
       );
       if (result.user != null) {
-        await _saveProfile(result.user!, name: name);
+        await _saveProfile(result.user!, name: name, role: role);
       }
       return result.user;
     } on AuthException catch (e) {
@@ -113,18 +122,20 @@ class AuthService {
   }
 
   // Hàm lưu thông tin vào bảng profiles trong database
-  Future<void> _saveProfile(User user, {String? name}) async {
+  Future<void> _saveProfile(User user, {String? name, String role = 'customer'}) async {
     try {
       final String profileName = name ??
           user.userMetadata?['full_name'] as String? ??
           user.userMetadata?['name'] as String? ??
           '';
+      final String userRole = user.userMetadata?['role'] as String? ?? role;
 
       await Supabase.instance.client.from('profiles').upsert({
         'id': user.id,
         'name': profileName,
         'email': user.email ?? '',
         'phone': user.phone ?? '',
+        'role': userRole,
         'birth_year': 0,
         'gender': '',
         'height': 0.0,

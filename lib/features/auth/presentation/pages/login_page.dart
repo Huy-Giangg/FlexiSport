@@ -2,8 +2,8 @@ import 'package:flexisport_app/features/auth/presentation/widgets/button_custom.
 import 'package:flexisport_app/features/auth/presentation/widgets/input_text_custom.dart';
 import 'package:flexisport_app/features/auth/services/auth_services.dart';
 import 'package:flexisport_app/features/auth/utils/validators.dart';
-import 'package:flexisport_app/features/home/presentation/providers/main_page_provider.dart';
-import 'package:flexisport_app/features/booking/presentation/providers/booking_sync_service.dart';
+import 'package:flexisport_app/features/customer/home/presentation/providers/main_page_provider.dart';
+import 'package:flexisport_app/features/customer/booking/presentation/providers/booking_sync_service.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
@@ -319,9 +319,16 @@ class _LoginPageState extends State<LoginPage> {
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(content: Text('Đăng nhập thành công!')),
             );
-            // Chuyển hướng sang trang chủ và hiện navbar
-            context.read<MainPageProvider>().showNavbar();
-            context.go('/home');
+
+            // Lấy role từ metadata của tài khoản Supabase
+            final role = user.userMetadata?['role'];
+            if (role == 'owner') {
+              context.go('/dashboard');
+            } else {
+              context.go('/home');
+              // Chuyển hướng sang trang chủ và hiện navbar
+              context.read<MainPageProvider>().showNavbar();
+            }
           }
         }
       } catch (e) {

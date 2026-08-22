@@ -1,31 +1,34 @@
+import 'dart:async';
 import 'package:flexisport_app/features/auth/presentation/pages/forgetpass_page.dart';
 import 'package:flexisport_app/features/auth/presentation/pages/login_page.dart';
 import 'package:flexisport_app/features/auth/presentation/pages/register_page.dart';
-import 'package:flexisport_app/features/booking/presentation/pages/booked_court_page.dart';
-import 'package:flexisport_app/features/booking/presentation/pages/booked_detail_page.dart';
-import 'package:flexisport_app/features/booking/presentation/pages/event_booking_page.dart';
-import 'package:flexisport_app/features/booking/presentation/pages/event_booking_detail_page.dart';
-import 'package:flexisport_app/features/booking/presentation/pages/visual_booking_page.dart';
-import 'package:flexisport_app/features/home/presentation/page/home_page.dart';
-import 'package:flexisport_app/features/home/presentation/page/main_page.dart';
-import 'package:flexisport_app/features/home/presentation/page/map_page.dart';
-import 'package:flexisport_app/features/matchmaking/presentation/pages/matchmaking_board_page.dart';
-import 'package:flexisport_app/features/matchmaking/presentation/pages/create_matchmaking_page.dart';
-import 'package:flexisport_app/features/matchmaking/presentation/pages/matchmaking_detail_page.dart';
-import 'package:flexisport_app/features/matchmaking/presentation/pages/manage_requests_page.dart';
-import 'package:flexisport_app/features/matchmaking/domain/entities/matchmaking_post.dart';
-import 'package:flexisport_app/features/payment/presentation/page/payment_cancel_page.dart';
-import 'package:flexisport_app/features/payment/presentation/page/payment_confirm_page.dart';
-import 'package:flexisport_app/features/payment/presentation/page/payment_info_page.dart';
-import 'package:flexisport_app/features/payment/presentation/page/payment_success_page.dart';
+import 'package:flexisport_app/features/customer/booking/presentation/pages/booked_court_page.dart';
+import 'package:flexisport_app/features/customer/booking/presentation/pages/booked_detail_page.dart';
+import 'package:flexisport_app/features/customer/booking/presentation/pages/event_booking_page.dart';
+import 'package:flexisport_app/features/customer/booking/presentation/pages/event_booking_detail_page.dart';
+import 'package:flexisport_app/features/customer/booking/presentation/pages/visual_booking_page.dart';
+import 'package:flexisport_app/features/customer/home/presentation/page/home_page.dart';
+import 'package:flexisport_app/features/customer/home/presentation/page/main_page.dart';
+import 'package:flexisport_app/features/customer/home/presentation/page/map_page.dart';
+import 'package:flexisport_app/features/customer/matchmaking/presentation/pages/matchmaking_board_page.dart';
+import 'package:flexisport_app/features/customer/matchmaking/presentation/pages/create_matchmaking_page.dart';
+import 'package:flexisport_app/features/customer/matchmaking/presentation/pages/matchmaking_detail_page.dart';
+import 'package:flexisport_app/features/customer/matchmaking/presentation/pages/manage_requests_page.dart';
+import 'package:flexisport_app/features/customer/matchmaking/domain/entities/matchmaking_post.dart';
+import 'package:flexisport_app/features/customer/payment/presentation/page/payment_cancel_page.dart';
+import 'package:flexisport_app/features/customer/payment/presentation/page/payment_confirm_page.dart';
+import 'package:flexisport_app/features/customer/payment/presentation/page/payment_info_page.dart';
+import 'package:flexisport_app/features/customer/payment/presentation/page/payment_success_page.dart';
 import 'package:flexisport_app/features/auth/presentation/pages/profile_page.dart';
+import 'package:flexisport_app/features/owner/dashboard/presentation/pages/mainpage.dart';
+import 'package:flexisport_app/features/owner/dashboard/presentation/pages/owner_dashboard_page.dart';
 import 'package:flexisport_app/features/profile/presentation/page/profile_detail_page.dart';
 import 'package:flexisport_app/features/profile/presentation/page/profile_edit_page.dart';
-import 'package:flexisport_app/features/sports_complex/presentation/page/home_page.dart';
-import 'package:flexisport_app/features/booking/domain/entities/event_entity.dart';
-import 'package:flexisport_app/features/payment/presentation/page/event_payment_info_page.dart';
-import 'package:flexisport_app/features/payment/presentation/page/event_payment_confirm_page.dart';
-import 'package:flexisport_app/features/discover/presentation/pages/discover_page.dart';
+import 'package:flexisport_app/features/customer/sports_complex/presentation/page/home_page.dart';
+import 'package:flexisport_app/features/customer/booking/domain/entities/event_entity.dart';
+import 'package:flexisport_app/features/customer/payment/presentation/page/event_payment_info_page.dart';
+import 'package:flexisport_app/features/customer/payment/presentation/page/event_payment_confirm_page.dart';
+import 'package:flexisport_app/features/customer/discover/presentation/pages/discover_page.dart';
 import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter/material.dart';
@@ -33,12 +36,54 @@ import 'package:flutter/material.dart';
 class AppRouter {
   static final GoRouter router = GoRouter(
     initialLocation: '/home',
+    refreshListenable: GoRouterRefreshStream(Supabase.instance.client.auth.onAuthStateChange),
+    redirect: (context, state) {
+      final session = Supabase.instance.client.auth.currentSession;
+      final user = session?.user;
+
+      final String? userRole = user?.userMetadata?['role'] ?? user?.appMetadata['role'];
+      final currentLocation = state.uri.toString();
+      final isAuthPage = currentLocation == '/login' || currentLocation == '/register' || currentLocation == '/forgetpass';
+
+      // 1. Chưa đăng nhập:
+      if (session == null) {
+        // Cố truy cập trang dành riêng cho chủ sân -> Đẩy sang login
+        if (currentLocation.startsWith('/dashboard')) {
+          return '/login';
+        }
+        // Khách vãng lai -> Cho phép ở lại /home và các trang xem tự do
+        return null;
+      }
+
+      // 2. Đã đăng nhập:
+      // Nếu đang ở màn auth (/login, /register,...) hoặc màn hình gốc '/'
+      if (isAuthPage || currentLocation == '/') {
+        if (userRole == 'owner') {
+          return '/dashboard'; // Điều hướng tới màn Dashboard chủ sân
+        } else {
+          return '/home';      // Điều hướng tới màn Home khách hàng
+        }
+      }
+
+      // Nếu là Chủ sân nhưng app mở lên mặc định ở /home -> Tự động chuyển sang /dashboard
+      if (userRole == 'owner' && currentLocation == '/home') {
+        return '/dashboard';
+      }
+
+      // Nếu là Khách hàng nhưng cố truy cập trang chủ sân /dashboard -> Đẩy về /home
+      if (userRole != 'owner' && currentLocation.startsWith('/dashboard')) {
+        return '/home';
+      }
+
+      return null;
+    },
     routes: [
+      // ShellRoute Khách hàng
       ShellRoute(
         builder: (context, state, child) {
           return MainPage(
-            child: child,
             shellLocation: state.uri.toString(),
+            child: child,
           );
         },
         routes: [
@@ -60,6 +105,7 @@ class AppRouter {
             builder: (context, state) => const ForgetpassPage(),
           ),
 
+          // Customer routes
           GoRoute(
             path: '/home',
             name: 'home',
@@ -260,6 +306,37 @@ class AppRouter {
           ),
         ],
       ),
+
+      // ShellRoute Chủ sân
+      ShellRoute(
+        builder: (context, state, child) {
+          return MainPageOwner(
+            shellLocation: state.uri.toString(),
+            child: child,
+          );
+        },
+        routes: [
+          GoRoute(
+            path: '/dashboard',
+            name: 'dashboard',
+            builder: (context, state) => const OwnerDashboardPage(),
+          ),
+        ],
+      ),
     ],
   );
+}
+
+class GoRouterRefreshStream extends ChangeNotifier {
+  GoRouterRefreshStream(Stream<dynamic> stream) {
+    notifyListeners();
+    _subscription = stream.asBroadcastStream().listen((_) => notifyListeners());
+  }
+  late final StreamSubscription<dynamic> _subscription;
+
+  @override
+  void dispose() {
+    _subscription.cancel();
+    super.dispose();
+  }
 }
