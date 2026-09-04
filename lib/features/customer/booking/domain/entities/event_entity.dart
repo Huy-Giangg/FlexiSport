@@ -8,6 +8,7 @@ class EventEntity {
   final bool isActive;
   final double ticketPrice;
   final int maxTickets;
+  final int minTickets;
   final String sportType;
   final String level;
   final String startTime;
@@ -24,6 +25,7 @@ class EventEntity {
     required this.isActive,
     required this.ticketPrice,
     required this.maxTickets,
+    this.minTickets = 2,
     required this.sportType,
     required this.level,
     required this.startTime,

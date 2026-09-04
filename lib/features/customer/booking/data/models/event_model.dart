@@ -11,6 +11,7 @@ class EventModel extends EventEntity {
     required super.isActive,
     required super.ticketPrice,
     required super.maxTickets,
+    super.minTickets = 2,
     required super.sportType,
     required super.level,
     required super.startTime,
@@ -19,6 +20,9 @@ class EventModel extends EventEntity {
   });
 
   factory EventModel.fromJson(Map<String, dynamic> json) {
+    final maxT = json['max_tickets'] as int? ?? 10;
+    final minT = json['min_tickets'] as int? ?? 2;
+
     return EventModel(
       id: json['id']?.toString() ?? '',
       venueId: json['venue_id']?.toString() ?? '',
@@ -28,7 +32,8 @@ class EventModel extends EventEntity {
       eventDate: json['event_date']?.toString() ?? '',
       isActive: json['is_active'] as bool? ?? false,
       ticketPrice: (json['ticket_price'] as num?)?.toDouble() ?? 0.0,
-      maxTickets: json['max_tickets'] as int? ?? 10,
+      maxTickets: maxT,
+      minTickets: minT.clamp(1, maxT > 0 ? maxT : 10),
       sportType: json['sport_type']?.toString() ?? 'Pickleball',
       level: json['level']?.toString() ?? 'Mọi trình độ',
       startTime: json['start_time']?.toString() ?? '15:00',
@@ -48,6 +53,7 @@ class EventModel extends EventEntity {
       'is_active': isActive,
       'ticket_price': ticketPrice,
       'max_tickets': maxTickets,
+      'min_tickets': minTickets,
       'sport_type': sportType,
       'level': level,
       'start_time': startTime,

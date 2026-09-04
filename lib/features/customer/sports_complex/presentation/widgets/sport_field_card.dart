@@ -271,6 +271,7 @@ class SportFieldCard extends StatelessWidget {
         logoUrl,
         fit: BoxFit.cover,
         width: double.infinity,
+        height: double.infinity,
         errorBuilder: (context, error, stackTrace) => _buildPlaceholder(),
       );
     }
@@ -278,16 +279,18 @@ class SportFieldCard extends StatelessWidget {
       logoUrl,
       fit: BoxFit.cover,
       width: double.infinity,
+      height: double.infinity,
       errorBuilder: (context, error, stackTrace) => _buildPlaceholder(),
     );
   }
 
   Widget _buildPlaceholder() {
     return Container(
-      color: Colors.grey[300],
+      color: const Color(0xFFE2E8F0),
       width: double.infinity,
-      child: const Center(
-        child: Icon(Icons.image, size: 40, color: Colors.grey),
+      height: double.infinity,
+      child: Center(
+        child: Icon(Icons.sports_tennis_rounded, size: 36, color: Colors.grey.shade400),
       ),
     );
   }

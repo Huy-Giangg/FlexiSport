@@ -1,7 +1,9 @@
+import 'package:flexisport_app/core/services/notification_service.dart';
 import 'package:flexisport_app/core/theme/app_colors.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_nav_bar/google_nav_bar.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 class MainPageOwner extends StatefulWidget {
   final String? shellLocation;
@@ -13,12 +15,27 @@ class MainPageOwner extends StatefulWidget {
 }
 
 class _MainPageOwnerState extends State<MainPageOwner> {
+  @override
+  void initState() {
+    super.initState();
+    final user = Supabase.instance.client.auth.currentUser;
+    if (user != null) {
+      NotificationService.instance.subscribeToOwnerNotifications(user.id);
+    }
+  }
+
+  @override
+  void dispose() {
+    NotificationService.instance.unsubscribeFromOwnerNotifications();
+    super.dispose();
+  }
+
   int _getIndex(String location) {
     if (location.startsWith('/dashboard')) return 0;
     if (location.startsWith('/owner/courts')) return 1;
     if (location.startsWith('/owner/bookings')) return 2;
-    if (location.startsWith('/owner/events')) return 3;
-    if (location.startsWith('/profile')) return 4;
+    if (location.startsWith('/owner/calendar') || location.startsWith('/owner/events')) return 3;
+    if (location.startsWith('/owner/profile')) return 4;
     return 0;
   }
 
@@ -28,16 +45,16 @@ class _MainPageOwnerState extends State<MainPageOwner> {
         context.go('/dashboard');
         break;
       case 1:
-        context.go('/dashboard');
+        context.go('/owner/courts');
         break;
       case 2:
-        context.go('/dashboard');
+        context.go('/owner/bookings');
         break;
       case 3:
-        context.go('/dashboard');
+        context.go('/owner/events');
         break;
       case 4:
-        context.go('/profile');
+        context.go('/owner/profile');
         break;
     }
   }
@@ -61,7 +78,7 @@ class _MainPageOwnerState extends State<MainPageOwner> {
           color: Colors.white,
           boxShadow: [
             BoxShadow(
-              color: Colors.green.withOpacity(0.5),
+              color: Colors.green.withValues(alpha: 0.3),
               blurRadius: 15,
               offset: const Offset(0, 5),
             ),
@@ -71,7 +88,7 @@ class _MainPageOwnerState extends State<MainPageOwner> {
         child: GNav(
           selectedIndex: currentIndex,
           onTabChange: _onTabChange,
-          tabBackgroundColor: AppColors.primary.withOpacity(0.9),
+          tabBackgroundColor: AppColors.primary.withValues(alpha: 0.9),
           color: Colors.grey,
           activeColor: Colors.white,
           gap: 8,

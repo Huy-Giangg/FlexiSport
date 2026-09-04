@@ -169,7 +169,10 @@ class SportShowDetail extends StatelessWidget {
                                             Text(
                                               sportsComplexEntity.rating
                                                   .toString(),
-                                              style: TextStyle(fontSize: 14, color: Colors.white),
+                                              style: TextStyle(
+                                                fontSize: 14,
+                                                color: Colors.white,
+                                              ),
                                             ),
                                           ],
                                         ),
@@ -283,7 +286,7 @@ class SportShowDetail extends StatelessWidget {
                             const SizedBox(width: 8),
                             Expanded(
                               child: Text(
-                                "Liên hệ",
+                                "0354676200",
                                 style: TextStyle(
                                   fontSize: 14,
                                   color: AppColors.onPrimaryContainer,
@@ -403,16 +406,30 @@ class SportShowDetail extends StatelessWidget {
       logoUrl,
       fit: BoxFit.cover,
       width: double.infinity,
+      height: 200,
       errorBuilder: (context, error, stackTrace) => _buildPlaceholder(),
     );
   }
 
   Widget _buildPlaceholder() {
     return Container(
-      color: Colors.grey[300],
       width: double.infinity,
-      child: const Center(
-        child: Icon(Icons.image, size: 40, color: Colors.grey),
+      height: 200,
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFFE2E8F0), Color(0xFFCBD5E1)],
+        ),
+      ),
+      child: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.image_outlined, size: 52, color: Colors.grey.shade500),
+            const SizedBox(height: 8),
+          ],
+        ),
       ),
     );
   }

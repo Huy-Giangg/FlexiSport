@@ -1,3 +1,4 @@
+import 'package:flexisport_app/core/theme/app_colors.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
@@ -25,14 +26,19 @@ class _ProfilePageState extends State<ProfilePage> {
             Supabase.instance.client.auth.currentUser;
 
         return Scaffold(
-          
           body: Column(
             children: [
               // Green Header background
               Container(
                 height: 120,
                 width: double.infinity,
-                color: const Color(0xFF006D38),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [AppColors.primaryContainer, AppColors.primary],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                ),
               ),
 
               // White body container with rounded top corners
@@ -344,7 +350,9 @@ class _ProfilePageState extends State<ProfilePage> {
                                 context.read<MainPageProvider>().hideNavbar();
                                 context.push('/BookedCourtPage').then((_) {
                                   if (context.mounted) {
-                                    context.read<MainPageProvider>().showNavbar();
+                                    context
+                                        .read<MainPageProvider>()
+                                        .showNavbar();
                                   }
                                 });
                               },
@@ -476,7 +484,10 @@ class _ProfilePageState extends State<ProfilePage> {
               // Header with logo and name
               Container(
                 width: double.infinity,
-                padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
+                padding: const EdgeInsets.symmetric(
+                  vertical: 24,
+                  horizontal: 16,
+                ),
                 decoration: const BoxDecoration(
                   color: Color(0xFF006D38),
                   borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
@@ -502,11 +513,12 @@ class _ProfilePageState extends State<ProfilePage> {
                           "assets/images/logo.png",
                           width: 64,
                           height: 64,
-                          errorBuilder: (context, error, stackTrace) => const Icon(
-                            Icons.sports_soccer,
-                            size: 64,
-                            color: Color(0xFF006D38),
-                          ),
+                          errorBuilder: (context, error, stackTrace) =>
+                              const Icon(
+                                Icons.sports_soccer,
+                                size: 64,
+                                color: Color(0xFF006D38),
+                              ),
                         ),
                       ),
                     ),
@@ -522,7 +534,10 @@ class _ProfilePageState extends State<ProfilePage> {
                     ),
                     const SizedBox(height: 6),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 4,
+                      ),
                       decoration: BoxDecoration(
                         color: Colors.white.withOpacity(0.2),
                         borderRadius: BorderRadius.circular(20),
@@ -556,19 +571,23 @@ class _ProfilePageState extends State<ProfilePage> {
                     const SizedBox(height: 12),
                     _buildVersionDetailItem(
                       icon: Icons.auto_awesome_rounded,
-                      text: "Tối ưu hóa giao diện đặt sân, thân thiện và hiện đại hơn.",
+                      text:
+                          "Tối ưu hóa giao diện đặt sân, thân thiện và hiện đại hơn.",
                     ),
                     _buildVersionDetailItem(
                       icon: Icons.bolt_rounded,
-                      text: "Tăng tốc độ phản hồi ứng dụng và giảm độ trễ khi tải dữ liệu.",
+                      text:
+                          "Tăng tốc độ phản hồi ứng dụng và giảm độ trễ khi tải dữ liệu.",
                     ),
                     _buildVersionDetailItem(
                       icon: Icons.sports_tennis_rounded,
-                      text: "Cải tiến tính năng ghép cặp & chi tiết lịch thi đấu.",
+                      text:
+                          "Cải tiến tính năng ghép cặp & chi tiết lịch thi đấu.",
                     ),
                     _buildVersionDetailItem(
                       icon: Icons.security_rounded,
-                      text: "Tăng cường bảo mật thông tin người dùng và tài khoản.",
+                      text:
+                          "Tăng cường bảo mật thông tin người dùng và tài khoản.",
                     ),
                     const SizedBox(height: 16),
                     const Divider(color: Color(0xFFEEEEEE)),
@@ -576,10 +595,7 @@ class _ProfilePageState extends State<ProfilePage> {
                     const Center(
                       child: Text(
                         "© 2026 FlexiSport. All rights reserved.",
-                        style: TextStyle(
-                          fontSize: 11,
-                          color: Colors.grey,
-                        ),
+                        style: TextStyle(fontSize: 11, color: Colors.grey),
                       ),
                     ),
                     const SizedBox(height: 16),
@@ -615,7 +631,10 @@ class _ProfilePageState extends State<ProfilePage> {
     );
   }
 
-  Widget _buildVersionDetailItem({required IconData icon, required String text}) {
+  Widget _buildVersionDetailItem({
+    required IconData icon,
+    required String text,
+  }) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 10.0),
       child: Row(
@@ -684,7 +703,10 @@ class _ProfilePageState extends State<ProfilePage> {
                             ),
                           ),
                           IconButton(
-                            icon: const Icon(Icons.close_rounded, color: Colors.grey),
+                            icon: const Icon(
+                              Icons.close_rounded,
+                              color: Colors.grey,
+                            ),
                             onPressed: () => Navigator.pop(context),
                           ),
                         ],
@@ -852,7 +874,10 @@ class _ProfilePageState extends State<ProfilePage> {
                           ),
                         ),
                         IconButton(
-                          icon: const Icon(Icons.close_rounded, color: Colors.grey),
+                          icon: const Icon(
+                            Icons.close_rounded,
+                            color: Colors.grey,
+                          ),
                           onPressed: () => Navigator.pop(context),
                         ),
                       ],
@@ -965,11 +990,7 @@ class _ProfilePageState extends State<ProfilePage> {
               color: const Color(0xFF006D38).withOpacity(0.1),
               borderRadius: BorderRadius.circular(10),
             ),
-            child: Icon(
-              icon,
-              color: const Color(0xFF006D38),
-              size: 24,
-            ),
+            child: Icon(icon, color: const Color(0xFF006D38), size: 24),
           ),
           const SizedBox(width: 16),
           Expanded(
@@ -1041,7 +1062,10 @@ class _ProfilePageState extends State<ProfilePage> {
                   style: TextStyle(fontWeight: FontWeight.w500),
                 ),
                 trailing: _selectedLanguage == "Tiếng Việt"
-                    ? const Icon(Icons.check_circle_rounded, color: Color(0xFF006D38))
+                    ? const Icon(
+                        Icons.check_circle_rounded,
+                        color: Color(0xFF006D38),
+                      )
                     : null,
                 onTap: () {
                   setState(() {
@@ -1056,7 +1080,12 @@ class _ProfilePageState extends State<ProfilePage> {
                   );
                 },
               ),
-              const Divider(height: 1, color: Color(0xFFEEEEEE), indent: 16, endIndent: 16),
+              const Divider(
+                height: 1,
+                color: Color(0xFFEEEEEE),
+                indent: 16,
+                endIndent: 16,
+              ),
               ListTile(
                 leading: const Text("🇬🇧", style: TextStyle(fontSize: 24)),
                 title: const Text(
@@ -1064,7 +1093,10 @@ class _ProfilePageState extends State<ProfilePage> {
                   style: TextStyle(fontWeight: FontWeight.w500),
                 ),
                 trailing: _selectedLanguage == "English"
-                    ? const Icon(Icons.check_circle_rounded, color: Color(0xFF006D38))
+                    ? const Icon(
+                        Icons.check_circle_rounded,
+                        color: Color(0xFF006D38),
+                      )
                     : null,
                 onTap: () {
                   setState(() {

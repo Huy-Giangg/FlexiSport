@@ -22,6 +22,12 @@ import 'package:flexisport_app/features/customer/payment/presentation/page/payme
 import 'package:flexisport_app/features/auth/presentation/pages/profile_page.dart';
 import 'package:flexisport_app/features/owner/dashboard/presentation/pages/mainpage.dart';
 import 'package:flexisport_app/features/owner/dashboard/presentation/pages/owner_dashboard_page.dart';
+import 'package:flexisport_app/features/owner/court_management/presentation/pages/court_management_page.dart';
+import 'package:flexisport_app/features/owner/booking_management/presentation/pages/booking_management_page.dart';
+import 'package:flexisport_app/features/owner/event_management/presentation/pages/owner_event_management_page.dart';
+import 'package:flexisport_app/features/owner/analytics/presentation/pages/analytics_page.dart';
+import 'package:flexisport_app/features/owner/profile/presentation/pages/owner_profile_page.dart';
+import 'package:flexisport_app/features/owner/profile/presentation/pages/owner_profile_detail_page.dart';
 import 'package:flexisport_app/features/profile/presentation/page/profile_detail_page.dart';
 import 'package:flexisport_app/features/profile/presentation/page/profile_edit_page.dart';
 import 'package:flexisport_app/features/customer/sports_complex/presentation/page/home_page.dart';
@@ -48,7 +54,7 @@ class AppRouter {
       // 1. Chưa đăng nhập:
       if (session == null) {
         // Cố truy cập trang dành riêng cho chủ sân -> Đẩy sang login
-        if (currentLocation.startsWith('/dashboard')) {
+        if (currentLocation.startsWith('/dashboard') || currentLocation.startsWith('/owner')) {
           return '/login';
         }
         // Khách vãng lai -> Cho phép ở lại /home và các trang xem tự do
@@ -70,8 +76,8 @@ class AppRouter {
         return '/dashboard';
       }
 
-      // Nếu là Khách hàng nhưng cố truy cập trang chủ sân /dashboard -> Đẩy về /home
-      if (userRole != 'owner' && currentLocation.startsWith('/dashboard')) {
+      // Nếu là Khách hàng nhưng cố truy cập trang chủ sân -> Đẩy về /home
+      if (userRole != 'owner' && (currentLocation.startsWith('/dashboard') || currentLocation.startsWith('/owner'))) {
         return '/home';
       }
 
@@ -320,6 +326,41 @@ class AppRouter {
             path: '/dashboard',
             name: 'dashboard',
             builder: (context, state) => const OwnerDashboardPage(),
+          ),
+          GoRoute(
+            path: '/owner/courts',
+            name: 'owner_courts',
+            builder: (context, state) => const CourtManagementPage(),
+          ),
+          GoRoute(
+            path: '/owner/bookings',
+            name: 'owner_bookings',
+            builder: (context, state) => const BookingManagementPage(),
+          ),
+          GoRoute(
+            path: '/owner/calendar',
+            name: 'owner_calendar',
+            builder: (context, state) => const OwnerEventManagementPage(),
+          ),
+          GoRoute(
+            path: '/owner/events',
+            name: 'owner_events',
+            builder: (context, state) => const OwnerEventManagementPage(),
+          ),
+          GoRoute(
+            path: '/owner/analytics',
+            name: 'owner_analytics',
+            builder: (context, state) => const OwnerAnalyticsPage(),
+          ),
+          GoRoute(
+            path: '/owner/profile',
+            name: 'owner_profile',
+            builder: (context, state) => const OwnerProfilePage(),
+          ),
+          GoRoute(
+            path: '/owner/profile/detail',
+            name: 'owner_profile_detail',
+            builder: (context, state) => const OwnerProfileDetailPage(),
           ),
         ],
       ),

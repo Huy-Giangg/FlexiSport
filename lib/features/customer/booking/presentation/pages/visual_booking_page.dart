@@ -1,5 +1,7 @@
+import 'package:flexisport_app/core/services/court_pricing_service.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flexisport_app/features/customer/booking/domain/entities/court_entity.dart';
+import 'package:flexisport_app/features/customer/booking/data/models/court_model.dart';
 import 'package:flexisport_app/features/customer/booking/presentation/widgets/date_picker.dart';
 import 'package:flexisport_app/features/customer/home/presentation/providers/main_page_provider.dart';
 import 'package:flutter/material.dart';
@@ -7,6 +9,7 @@ import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import 'package:flexisport_app/features/customer/booking/presentation/providers/booking_provider.dart';
 import 'package:flexisport_app/features/customer/sports_complex/domain/entities/sports_complex_entity.dart';
+import 'package:flexisport_app/features/customer/sports_complex/data/models/sports_complex_model.dart';
 import 'package:flexisport_app/features/customer/sports_complex/presentation/providers/sports_complex_provider.dart';
 import 'package:flexisport_app/features/customer/payment/presentation/page/payment_info_page.dart';
 
@@ -40,6 +43,7 @@ class _VisualBookingPageState extends State<VisualBookingPage> {
   double _zoomFactor = 1.0;
 
   String _userId = '';
+  SportsComplexEntity? _venue;
   DateTime _selectedDate = DateTime(
     DateTime.now().year,
     DateTime.now().month,
@@ -53,14 +57,16 @@ class _VisualBookingPageState extends State<VisualBookingPage> {
     return "$year-$month-$day";
   }
 
-  TimeOfDay _parseTime(String timeStr) {
-    final parts = timeStr.split(':');
-    if (parts.length >= 2) {
-      final hour = int.tryParse(parts[0]) ?? 6;
-      final minute = int.tryParse(parts[1]) ?? 0;
-      return TimeOfDay(hour: hour, minute: minute);
+  TimeOfDay _parseTime(String timeStr, {TimeOfDay fallback = const TimeOfDay(hour: 6, minute: 0)}) {
+    final cleaned = timeStr.trim();
+    if (cleaned.isEmpty) return fallback;
+    final parts = cleaned.split(':');
+    if (parts.isNotEmpty) {
+      final hour = int.tryParse(parts[0]) ?? fallback.hour;
+      final minute = parts.length > 1 ? (int.tryParse(parts[1]) ?? fallback.minute) : 0;
+      return TimeOfDay(hour: hour.clamp(0, 23), minute: minute.clamp(0, 59));
     }
-    return const TimeOfDay(hour: 6, minute: 0);
+    return fallback;
   }
 
   bool _isSlotInPast(int slotIndex, String openTime) {
@@ -68,24 +74,27 @@ class _VisualBookingPageState extends State<VisualBookingPage> {
     final todayDate = DateTime(now.year, now.month, now.day);
     final selectedDateOnly = DateTime(_selectedDate.year, _selectedDate.month, _selectedDate.day);
     
+    // 1. Nếu là ngày trong quá khứ -> toàn bộ ô đều bị khóa
     if (selectedDateOnly.isBefore(todayDate)) {
       return true;
     }
+    // 2. Nếu là ngày trong tương lai (từ ngày mai trở đi) -> toàn bộ ô đều khả dụng
     if (selectedDateOnly.isAfter(todayDate)) {
       return false;
     }
     
-    final open = _parseTime(openTime);
+    // 3. Nếu là ngày hôm nay -> chỉ khóa các ô đã kết thúc trước giờ hiện tại
+    final open = _parseTime(openTime, fallback: const TimeOfDay(hour: 6, minute: 0));
     final startMinutes = open.hour * 60 + open.minute;
-    final slotStartMinutes = startMinutes + slotIndex * 30;
+    final slotEndMinutes = startMinutes + (slotIndex + 1) * 30; // Thời điểm kết thúc ca này
     final currentMinutes = now.hour * 60 + now.minute;
     
-    return slotStartMinutes < currentMinutes;
+    return slotEndMinutes <= currentMinutes;
   }
 
   List<String> _generateTimeLabels(String openTimeStr, String closeTimeStr) {
-    final open = _parseTime(openTimeStr);
-    final close = _parseTime(closeTimeStr);
+    final open = _parseTime(openTimeStr, fallback: const TimeOfDay(hour: 6, minute: 0));
+    final close = _parseTime(closeTimeStr, fallback: const TimeOfDay(hour: 22, minute: 0));
 
     int startMinutes = open.hour * 60 + open.minute;
     int endMinutes = close.hour * 60 + close.minute;
@@ -97,7 +106,7 @@ class _VisualBookingPageState extends State<VisualBookingPage> {
 
     final List<String> labels = [];
     int current = startMinutes;
-    while (current < endMinutes) {
+    while (current <= endMinutes) {
       final hour = current ~/ 60;
       final minute = current % 60;
       final hourStr = hour.toString().padLeft(2, '0');
@@ -119,6 +128,8 @@ class _VisualBookingPageState extends State<VisualBookingPage> {
 
   late BookingProvider _bookingProvider;
 
+  bool _isVenueLoading = true;
+
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
@@ -130,6 +141,7 @@ class _VisualBookingPageState extends State<VisualBookingPage> {
     super.initState();
     // Lấy thông tin UID từ Supabase, dự phòng guest_user
     _userId = Supabase.instance.client.auth.currentUser?.id ?? 'guest_user';
+    _loadVenueData();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final provider = context.read<BookingProvider>();
       provider.loadCourts(widget.venueId).then((_) {
@@ -137,13 +149,38 @@ class _VisualBookingPageState extends State<VisualBookingPage> {
         provider.loadBookedSlots(widget.venueId, _formattedQueryDate);
         provider.loadCourtBlocks(widget.venueId, _formattedQueryDate);
         provider.loadEventSlots(widget.venueId, _formattedQueryDate);
+        provider.loadEvents(widget.venueId);
       });
     });
   }
 
+  Future<void> _loadVenueData() async {
+    try {
+      final res = await Supabase.instance.client
+          .from('venues')
+          .select('id, name, address, rating, open_time, close_time, latitude, longitude, sports_type, logo_url')
+          .eq('id', widget.venueId)
+          .maybeSingle();
+      if (res != null && mounted) {
+        setState(() {
+          _venue = SportsComplexModel.fromJson(res);
+          _isVenueLoading = false;
+        });
+        return;
+      }
+    } catch (e) {
+      debugPrint("Lỗi tải thông tin venue: $e");
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isVenueLoading = false;
+        });
+      }
+    }
+  }
+
   @override
   void dispose() {
-    // Giải phóng các ô giữ chỗ khi đóng trang để tránh giữ vô thời hạn
     if (_selectedSlots.isNotEmpty) {
       _bookingProvider.releaseAllUserLocks(
         venueId: widget.venueId,
@@ -152,6 +189,52 @@ class _VisualBookingPageState extends State<VisualBookingPage> {
       );
     }
     super.dispose();
+  }
+
+  // Kiểm tra xem ô này có thuộc sự kiện/giải đấu không
+  bool _isEventSlot(CourtEntity court, int slotIndex, BookingProvider bookingProvider, SportsComplexEntity venue) {
+    // 1. Kiểm tra qua bảng event_slots
+    final hasEventSlot = bookingProvider.eventSlots.any((e) {
+      final evDateClean = e.eventDate.split('T')[0].split(' ')[0].trim();
+      return e.courtId == court.id &&
+          e.slotIndex == slotIndex &&
+          (evDateClean == _formattedQueryDate || e.eventDate == _formattedQueryDate);
+    });
+    if (hasEventSlot) return true;
+
+    // 2. Dự phòng trực tiếp từ bảng events
+    if (bookingProvider.events.isNotEmpty) {
+      final openT = _parseTime(venue.open_time, fallback: const TimeOfDay(hour: 6, minute: 0));
+      final slotStartMin = openT.hour * 60 + openT.minute + slotIndex * 30;
+      final slotEndMin = slotStartMin + 30;
+
+      for (final ev in bookingProvider.events) {
+        if (!ev.isActive) continue;
+
+        final evDateClean = ev.eventDate.split('T')[0].split(' ')[0].trim();
+        if (evDateClean != _formattedQueryDate) continue;
+
+        final courtNameClean = court.name.trim().toLowerCase();
+        final evCourtClean = ev.courtName.trim().toLowerCase();
+
+        final isSameCourt = courtNameClean == evCourtClean ||
+            evCourtClean.contains(courtNameClean) ||
+            courtNameClean.contains(evCourtClean);
+
+        if (isSameCourt) {
+          final evStart = _parseTime(ev.startTime, fallback: const TimeOfDay(hour: 15, minute: 0));
+          final evEnd = _parseTime(ev.endTime, fallback: const TimeOfDay(hour: 18, minute: 0));
+
+          final evStartMin = evStart.hour * 60 + evStart.minute;
+          final evEndMin = evEnd.hour * 60 + evEnd.minute;
+
+          if (slotStartMin < evEndMin && slotEndMin > evStartMin) {
+            return true;
+          }
+        }
+      }
+    }
+    return false;
   }
 
 
@@ -170,80 +253,126 @@ class _VisualBookingPageState extends State<VisualBookingPage> {
   }
 
   // Tính tổng số tiền dựa trên các ô đang chọn
-  double _calculateTotalAmount(List<CourtEntity> courts) {
+  double _calculateTotalAmount(List<CourtEntity> courts, String openTime) {
     double total = 0;
     for (var key in _selectedSlots) {
-      final parts = key.split('_');
-      final courtId = parts[0];
-      final court = courts.firstWhere((c) => c.id == courtId);
-      // Mỗi slot tương đương 30 phút (0.5 giờ)
-      total += court.pricePerHour * 0.5;
+      final lastUnderscore = key.lastIndexOf('_');
+      if (lastUnderscore == -1) continue;
+      final courtId = key.substring(0, lastUnderscore);
+      final slotIndex = int.tryParse(key.substring(lastUnderscore + 1)) ?? 0;
+      final court = courts.firstWhere(
+        (c) => c.id == courtId,
+        orElse: () => CourtModel(id: courtId, name: 'Sân', pricePerHour: 140000.0, venueId: widget.venueId),
+      );
+      total += CourtPricingService.instance.calculateSlotPrice(
+        courtId: court.id,
+        slotIndex: slotIndex,
+        date: _selectedDate,
+        openTime: openTime,
+        fallbackBasePrice: court.pricePerHour,
+      );
     }
     return total;
   }
 
   // Xử lý sự kiện khi chạm vào một ô lưới giờ
-  void _onSlotTap(String courtId, int slotIndex, SlotStatus status) async {
-    if (status != SlotStatus.empty) return; // Chỉ cho phép chọn ô trống
+  void _onSlotTap(String courtId, int slotIndex, SlotStatus status, {bool isPast = false}) {
+    final bookingProvider = context.read<BookingProvider>();
+    final court = bookingProvider.courts.firstWhere(
+      (c) => c.id == courtId,
+      orElse: () => CourtModel(id: courtId, name: 'Sân', pricePerHour: 140000.0, venueId: widget.venueId),
+    );
 
     final slotKey = "${courtId}_$slotIndex";
     final isSelected = _selectedSlots.contains(slotKey);
-    final bookingProvider = context.read<BookingProvider>();
 
+    // 1. Nếu ô này đã được chọn -> Bấm vào để hủy chọn ngay lập tức và giải phóng giữ chỗ
     if (isSelected) {
-      // Hủy chọn: giải phóng giữ chỗ trên Supabase
       setState(() {
         _selectedSlots.remove(slotKey);
       });
-      try {
-        await bookingProvider.releaseCourtSlot(
-          venueId: widget.venueId,
-          courtId: courtId,
-          slotIndex: slotIndex,
-          date: _formattedQueryDate,
-          userId: _userId,
-        );
-      } catch (e) {
-        debugPrint("Lỗi giải phóng giữ chỗ: $e");
-      }
-    } else {
-      // Chọn mới: tiến hành giữ chỗ tạm thời trên Supabase
-      final success = await bookingProvider.holdCourtSlot(
+      bookingProvider.releaseCourtSlot(
         venueId: widget.venueId,
         courtId: courtId,
         slotIndex: slotIndex,
         date: _formattedQueryDate,
         userId: _userId,
       );
+      return;
+    }
 
-      if (success) {
-        if (!mounted) return;
-        setState(() {
-          _selectedSlots.add(slotKey);
-        });
-      } else {
-        if (!mounted) return;
+    // 2. Khung giờ đã qua trong ngày (quá khứ) -> Chặn và thông báo
+    if (isPast) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).hideCurrentSnackBar();
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text("Ô thời gian này vừa mới được đặt hoặc có người giữ chỗ trước!"),
-            backgroundColor: Colors.redAccent,
-            duration: Duration(seconds: 2),
+          SnackBar(
+            content: const Text("Khung giờ này đã qua trong ngày hôm nay, vui lòng chọn khung giờ khác hoặc chuyển sang ngày mai."),
+            backgroundColor: Colors.grey.shade800,
+            duration: const Duration(seconds: 2),
           ),
         );
       }
+      return;
     }
+
+    // 3. Sân bảo trì -> Chặn và thông báo
+    if (!court.isActive || court.status == 'maintenance') {
+      if (mounted) {
+        ScaffoldMessenger.of(context).hideCurrentSnackBar();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text("Sân \"${court.name}\" đang trong thời gian bảo trì, vui lòng chọn sân khác."),
+            backgroundColor: const Color(0xFFED6C02),
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      }
+      return;
+    }
+
+    // 4. Ô đã có người đặt, tạm khóa hoặc là sự kiện -> Chặn và thông báo
+    if (status != SlotStatus.empty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).hideCurrentSnackBar();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(status == SlotStatus.booked
+                ? "Ô thời gian này đã có người đặt trước!"
+                : (status == SlotStatus.event
+                    ? "Ô thời gian này đang diễn ra sự kiện thể thao!"
+                    : "Ô thời gian này đang tạm khóa.")),
+            backgroundColor: Colors.redAccent,
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      }
+      return;
+    }
+
+    // 5. Chọn mới ô này thành công -> Cập nhật UI và giữ chỗ tức thì trong DB
+    setState(() {
+      _selectedSlots.add(slotKey);
+    });
+    bookingProvider.holdCourtSlot(
+      venueId: widget.venueId,
+      courtId: courtId,
+      slotIndex: slotIndex,
+      date: _formattedQueryDate,
+      userId: _userId,
+    );
   }
 
-  List<SelectedSlotDetail> _buildSelectedSlotDetails(List<CourtEntity> courts, List<String> timeLabels) {
+  List<SelectedSlotDetail> _buildSelectedSlotDetails(List<CourtEntity> courts, List<String> timeLabels, String openTime) {
     final List<SelectedSlotDetail> list = [];
 
     // 1. Phân nhóm các slotIndex theo courtId
     final Map<String, List<int>> courtToSlots = {};
     for (var key in _selectedSlots) {
-      final parts = key.split('_');
-      if (parts.length < 2) continue;
-      final courtId = parts[0];
-      final slotIndex = int.tryParse(parts[1]) ?? 0;
+      final lastUnderscore = key.lastIndexOf('_');
+      if (lastUnderscore == -1) continue;
+      final courtId = key.substring(0, lastUnderscore);
+      final slotIndex = int.tryParse(key.substring(lastUnderscore + 1)) ?? 0;
       courtToSlots.putIfAbsent(courtId, () => []).add(slotIndex);
     }
 
@@ -299,8 +428,16 @@ class _VisualBookingPageState extends State<VisualBookingPage> {
           formattedTimeRange = "$startStr - $endStr";
         }
 
-        final numSlots = endIdx - startIdx + 1;
-        final totalPrice = numSlots * court.pricePerHour * 0.5;
+        double totalPrice = 0.0;
+        for (int s = startIdx; s <= endIdx; s++) {
+          totalPrice += CourtPricingService.instance.calculateSlotPrice(
+            courtId: court.id,
+            slotIndex: s,
+            date: _selectedDate,
+            openTime: openTime,
+            fallbackBasePrice: court.pricePerHour,
+          );
+        }
 
         list.add(SelectedSlotDetail(
           courtName: court.name,
@@ -328,11 +465,13 @@ class _VisualBookingPageState extends State<VisualBookingPage> {
     final courts = bookingProvider.courts;
 
     final sportsComplexProvider = context.watch<SportsComplexProvider>();
-    SportsComplexEntity? foundVenue;
-    for (final s in sportsComplexProvider.stadiums) {
-      if (s.id == widget.venueId) {
-        foundVenue = s;
-        break;
+    SportsComplexEntity? foundVenue = _venue;
+    if (foundVenue == null) {
+      for (final s in sportsComplexProvider.stadiums) {
+        if (s.id == widget.venueId) {
+          foundVenue = s;
+          break;
+        }
       }
     }
     final venue = foundVenue ?? SportsComplexEntity(
@@ -347,7 +486,7 @@ class _VisualBookingPageState extends State<VisualBookingPage> {
 
     final timeLabels = _generateTimeLabels(venue.open_time, venue.close_time);
 
-    if (bookingProvider.isLoading) {
+    if (bookingProvider.isLoading || _isVenueLoading) {
       return const Scaffold(
         backgroundColor: Color(0xFFF9FAF7),
         body: Center(
@@ -420,24 +559,25 @@ class _VisualBookingPageState extends State<VisualBookingPage> {
       );
     }
 
-    // Khởi tạo/cập nhật grid đặt sân động dựa trên danh sách sân thực tế
+    final totalSlots = timeLabels.length > 1 ? timeLabels.length - 1 : 0;
+
+    // Khởi tạo/cập nhật grid đặt sân động dựa trên danh sách sân thực tế và số lượng ô giờ
     for (int idx = 0; idx < courts.length; idx++) {
       final court = courts[idx];
-      if (!_bookingGrid.containsKey(court.id)) {
+      final currentMap = _bookingGrid[court.id];
+      if (currentMap == null || currentMap.length != totalSlots) {
         final map = <int, SlotStatus>{};
-        for (int i = 0; i < timeLabels.length; i++) {
+        for (int i = 0; i < totalSlots; i++) {
           map[i] = SlotStatus.empty;
         }
         _bookingGrid[court.id] = map;
-
-
       }
     }
 
     // Chiều rộng cơ bản của một ô giờ, nhân với hệ số zoom factor
     final double cellWidth = 70.0 * _zoomFactor;
     const double cellHeight = 60.0;
-    const double courtColumnWidth = 100.0;
+    const double courtColumnWidth = 125.0;
     const double headerHeight = 40.0;
 
     return Scaffold(
@@ -483,6 +623,7 @@ class _VisualBookingPageState extends State<VisualBookingPage> {
                         provider.loadBookedSlots(widget.venueId, _formattedQueryDate);
                         provider.loadCourtBlocks(widget.venueId, _formattedQueryDate);
                         provider.loadEventSlots(widget.venueId, _formattedQueryDate);
+                        provider.loadEvents(widget.venueId);
                       },
                     ),
                   ),
@@ -561,6 +702,30 @@ class _VisualBookingPageState extends State<VisualBookingPage> {
               ),
             ),
 
+            // Banner thông báo nếu toàn bộ cơ sở đang trong thời gian bảo trì
+            if (courts.isNotEmpty && courts.every((c) => !c.isActive || c.status == 'maintenance'))
+              Container(
+                width: double.infinity,
+                color: const Color(0xFFFFF3E0),
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                child: Row(
+                  children: const [
+                    Icon(Icons.warning_amber_rounded, color: Color(0xFFE65100), size: 20),
+                    SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        "Cơ sở hiện đang bảo trì toàn bộ sân. Tạm ngưng nhận đặt lịch trực tuyến.",
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFFE65100),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
             // Lưới Đặt Sân Cuộn 2 Chiều Đồng Bộ
             Expanded(
               child: SingleChildScrollView(
@@ -576,37 +741,72 @@ class _VisualBookingPageState extends State<VisualBookingPage> {
                           width: courtColumnWidth,
                           height: headerHeight,
                           decoration: BoxDecoration(
-                            color: Colors.grey.shade100,
+                            color: const Color(0xFFDDF3F8),
                             border: Border(
-                              bottom: BorderSide(color: Colors.grey.shade300, width: 1),
+                              bottom: BorderSide(color: Colors.grey.shade300, width: 1.2),
                               right: BorderSide(color: Colors.grey.shade300, width: 1.5),
                             ),
                           ),
                           alignment: Alignment.center,
                           child: const Text(
                             "Sân",
-                            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.black54),
+                            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF1E293B)),
                           ),
                         ),
                         // Danh sách tên sân
                         ...courts.map((court) {
+                          final isMaintenance = !court.isActive || court.status == 'maintenance';
                           return Container(
                             width: courtColumnWidth,
                             height: cellHeight,
                             decoration: BoxDecoration(
-                              color: Colors.white,
+                              color: isMaintenance ? const Color(0xFFFFF8E1) : Colors.white,
                               border: Border(
                                 bottom: BorderSide(color: Colors.grey.shade200, width: 1),
                                 right: BorderSide(color: Colors.grey.shade300, width: 1.5),
                               ),
                             ),
-                            padding: const EdgeInsets.symmetric(horizontal: 6),
-                            alignment: Alignment.centerLeft,
-                            child: Text(
-                              court.name,
-                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.black87),
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            alignment: Alignment.center,
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  court.name,
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 12,
+                                    color: isMaintenance ? Colors.grey.shade700 : Colors.black87,
+                                    height: 1.2,
+                                  ),
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                  softWrap: true,
+                                ),
+                                if (isMaintenance) ...[
+                                  const SizedBox(height: 2),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFFFFF3E0),
+                                      borderRadius: BorderRadius.circular(4),
+                                      border: Border.all(color: const Color(0xFFFFB74D), width: 0.8),
+                                    ),
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: const [
+                                        Icon(Icons.build_circle_outlined, size: 9, color: Color(0xFFE65100)),
+                                        SizedBox(width: 2),
+                                        Text(
+                                          "Bảo trì",
+                                          style: TextStyle(fontSize: 8, fontWeight: FontWeight.bold, color: Color(0xFFE65100)),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ],
                             ),
                           );
                         }),
@@ -617,81 +817,113 @@ class _VisualBookingPageState extends State<VisualBookingPage> {
                     Expanded(
                       child: SingleChildScrollView(
                         scrollDirection: Axis.horizontal,
+                        padding: const EdgeInsets.symmetric(horizontal: 28.0),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            // Dòng Header Khung Giờ
-                            Row(
-                              children: List.generate(timeLabels.length, (index) {
-                                return Container(
-                                  width: cellWidth,
-                                  height: headerHeight,
-                                  decoration: BoxDecoration(
-                                    color: Colors.grey.shade100,
-                                    border: Border(
-                                      bottom: BorderSide(color: Colors.grey.shade300, width: 1),
-                                      right: BorderSide(color: Colors.grey.shade200, width: 1),
+                            // Dòng Header Khung Giờ dạng Thước Đo Thời Gian (Timeline Ruler)
+                            Container(
+                              width: totalSlots * cellWidth,
+                              height: headerHeight,
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFDDF3F8), // Nền xanh nhạt giống ảnh mẫu
+                                border: Border(
+                                  bottom: BorderSide(color: Colors.grey.shade300, width: 1.2),
+                                ),
+                              ),
+                              child: Stack(
+                                clipBehavior: Clip.none,
+                                children: [
+                                  // Các mốc vạch và nhãn giờ ở từng đầu/cuối của mỗi ô (từ mốc mở cửa đến mốc đóng cửa)
+                                  for (int i = 0; i <= totalSlots; i++)
+                                    Positioned(
+                                      left: (i * cellWidth) - 25,
+                                      top: 0,
+                                      bottom: 0,
+                                      width: 50,
+                                      child: Stack(
+                                        clipBehavior: Clip.none,
+                                        children: [
+                                          // Nhãn thời gian căn giữa chính xác trên từng vạch mốc
+                                          Align(
+                                            alignment: Alignment.topCenter,
+                                            child: Padding(
+                                              padding: const EdgeInsets.only(top: 4),
+                                              child: Text(
+                                                timeLabels[i],
+                                                textAlign: TextAlign.center,
+                                                style: const TextStyle(
+                                                  fontSize: 11,
+                                                  fontWeight: FontWeight.w600,
+                                                  color: Color(0xFF0F172A),
+                                                  letterSpacing: -0.2,
+                                                ),
+                                              ),
+                                            ),
+                                          ),
+                                          // Vạch tick mark chỉ mốc thời gian màu vàng cam ở đáy header
+                                          Align(
+                                            alignment: Alignment.bottomCenter,
+                                            child: Container(
+                                              width: 2,
+                                              height: 7,
+                                              decoration: BoxDecoration(
+                                                color: const Color(0xFFF59E0B),
+                                                borderRadius: BorderRadius.circular(1),
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
                                     ),
-                                  ),
-                                  alignment: Alignment.center,
-                                  child: Column(
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    children: [
-                                      Text(
-                                        timeLabels[index],
-                                        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.black54),
-                                      ),
-                                      const SizedBox(height: 2),
-                                      Container(
-                                        width: 2,
-                                        height: 6,
-                                        color: Colors.orange.shade400,
-                                      ),
-                                    ],
-                                  ),
-                                );
-                              }),
+                                ],
+                              ),
                             ),
 
                             // Các dòng Lưới Ô giờ tương ứng từng Sân
                             Column(
                               children: courts.map((court) {
                                 final courtSlots = _bookingGrid[court.id] ?? {};
+                                final isCourtMaintenance = !court.isActive || court.status == 'maintenance';
+
                                 return Row(
-                                  children: List.generate(timeLabels.length, (slotIndex) {
+                                  children: List.generate(totalSlots, (slotIndex) {
                                     var status = courtSlots[slotIndex] ?? SlotStatus.empty;
 
-                                    // Kiểm tra xem ô này đã được đặt thành công chưa (từ Supabase)
-                                    final isBooked = bookingProvider.bookedSlots.any((b) =>
-                                        b.courtId == court.id &&
-                                        b.slotIndex == slotIndex);
-
-                                    // Kiểm tra xem ô này có bị khóa hành chính bởi Admin không (từ Supabase)
-                                    final isBlocked = bookingProvider.courtBlocks.any((b) =>
-                                        b.courtId == court.id &&
-                                        b.slotIndex == slotIndex);
-
-                                    // Kiểm tra xem ô này có nằm trong Sự kiện nào không (từ Supabase)
-                                    final isEvent = bookingProvider.eventSlots.any((e) =>
-                                        e.courtId == court.id &&
-                                        e.slotIndex == slotIndex);
-
-                                    if (isBooked) {
-                                      status = SlotStatus.booked; // Hiển thị là đã đặt
-                                    } else if (isBlocked) {
-                                      status = SlotStatus.locked; // Hiển thị là đã khóa
-                                    } else if (isEvent) {
-                                      status = SlotStatus.event; // Hiển thị là sự kiện
+                                    // Nếu sân đang bảo trì, toàn bộ ô giờ bị khóa
+                                    if (isCourtMaintenance) {
+                                      status = SlotStatus.locked;
                                     } else {
-                                      // Kiểm tra xem ô này có bị người dùng khác giữ chỗ hay không
-                                      final isLockedByOther = bookingProvider.activeLocks.any((lock) =>
-                                          lock.courtId == court.id &&
-                                          lock.slotIndex == slotIndex &&
-                                          lock.userId != _userId &&
-                                          !lock.isExpired);
+                                      // Kiểm tra xem ô này đã được đặt thành công chưa (từ Supabase)
+                                      final isBooked = bookingProvider.bookedSlots.any((b) =>
+                                          b.courtId == court.id &&
+                                          b.slotIndex == slotIndex);
 
-                                      if (isLockedByOther) {
-                                        status = SlotStatus.locked; // Hiển thị là đã khoá
+                                      // Kiểm tra xem ô này có bị khóa hành chính bởi Admin/Chủ sân không (từ Supabase)
+                                      final isBlocked = bookingProvider.courtBlocks.any((b) =>
+                                          b.courtId == court.id &&
+                                          b.slotIndex == slotIndex);
+
+                                      // Kiểm tra ô sự kiện (qua event_slots và trực tiếp từ bảng events)
+                                      final isEvent = _isEventSlot(court, slotIndex, bookingProvider, venue);
+
+                                      if (isBooked) {
+                                        status = SlotStatus.booked; // Hiển thị là đã đặt
+                                      } else if (isBlocked) {
+                                        status = SlotStatus.locked; // Hiển thị là đã khóa
+                                      } else if (isEvent) {
+                                        status = SlotStatus.event; // Hiển thị là sự kiện
+                                      } else {
+                                        // Kiểm tra xem ô này có bị người dùng khác giữ chỗ hay không
+                                        final isLockedByOther = bookingProvider.activeLocks.any((lock) =>
+                                            lock.courtId == court.id &&
+                                            lock.slotIndex == slotIndex &&
+                                            lock.userId != _userId &&
+                                            !lock.isExpired);
+
+                                        if (isLockedByOther) {
+                                          status = SlotStatus.locked; // Hiển thị là đã khoá
+                                        }
                                       }
                                     }
 
@@ -699,15 +931,13 @@ class _VisualBookingPageState extends State<VisualBookingPage> {
                                     final isSelected = _selectedSlots.contains(slotKey);
                                     final isPast = _isSlotInPast(slotIndex, venue.open_time);
 
-                                    return GestureDetector(
-                                      onTap: isPast ? null : () => _onSlotTap(court.id, slotIndex, status),
-                                      child: _buildGridCell(
-                                        status: status,
-                                        isSelected: isSelected,
-                                        width: cellWidth,
-                                        height: cellHeight,
-                                        isPast: isPast,
-                                      ),
+                                    return _buildGridCell(
+                                      status: status,
+                                      isSelected: isSelected,
+                                      width: cellWidth,
+                                      height: cellHeight,
+                                      isPast: isPast,
+                                      onTap: () => _onSlotTap(court.id, slotIndex, status, isPast: isPast),
                                     );
                                   }),
                                 );
@@ -735,70 +965,75 @@ class _VisualBookingPageState extends State<VisualBookingPage> {
     required bool isSelected,
     required double width,
     required double height,
+    required VoidCallback onTap,
     bool isPast = false,
   }) {
     Color cellColor = Colors.white;
     BorderSide borderSide = BorderSide(color: Colors.grey.shade200, width: 0.8);
     Widget? child;
 
-    if (isPast) {
-      cellColor = Colors.grey.shade100;
-      borderSide = BorderSide(color: Colors.grey.shade300, width: 0.8);
-      if (status == SlotStatus.booked) {
-        child = Icon(Icons.block_flipped, color: Colors.grey.shade300, size: 16);
-      } else if (status == SlotStatus.locked) {
-        child = Icon(Icons.lock_outline, color: Colors.grey.shade300, size: 16);
-      } else if (status == SlotStatus.event) {
-        child = Icon(Icons.priority_high_rounded, color: Colors.grey.shade300, size: 16);
-      } else {
-        child = Icon(Icons.history, color: Colors.grey.shade300, size: 14);
-      }
-    } else if (isSelected) {
-      cellColor = const Color(0xFF81C784); // Xanh lá dịu mắt khi chọn
+    final isLockedSlot = isPast || status == SlotStatus.locked;
+
+    if (isSelected) {
+      cellColor = const Color(0xFF81C784); // Xanh lá khi chọn
       borderSide = const BorderSide(color: Color(0xFF388E3C), width: 1.2);
       child = const Icon(Icons.check_circle, color: Colors.white, size: 18);
-    } else {
-      switch (status) {
-        case SlotStatus.empty:
-          cellColor = Colors.white;
-          break;
-        case SlotStatus.booked:
-          cellColor = const Color(0xFFFFCDD2); // Đỏ pastel
-          borderSide = BorderSide(color: Colors.red.shade200, width: 0.8);
-          child = Icon(Icons.block_flipped, color: Colors.red.shade400, size: 16);
-          break;
-        case SlotStatus.locked:
-          cellColor = const Color(0xFFE0E0E0); // Xám
-          borderSide = BorderSide(color: Colors.grey.shade400, width: 0.8);
-          child = Icon(Icons.lock_outline, color: Colors.grey.shade600, size: 16);
-          break;
-        case SlotStatus.event:
-          cellColor = const Color(0xFFE1BEE7); // Tím pastel
-          borderSide = BorderSide(color: Colors.purple.shade200, width: 0.8);
-          child = Icon(Icons.priority_high_rounded, color: Colors.purple.shade700, size: 16);
-          break;
-      }
+    } else if (isLockedSlot) {
+      cellColor = const Color(0xFFEBEBEB); // Nền xám nhạt đồng bộ chính xác theo ảnh
+      borderSide = BorderSide(color: Colors.grey.shade300, width: 0.8);
+      child = const Icon(Icons.lock_rounded, color: Color(0xFF9E9E9E), size: 18); // Icon ổ khóa bo tròn ở giữa
+    } else if (status == SlotStatus.booked) {
+      cellColor = const Color(0xFFFFCDD2); // Đỏ pastel đã đặt
+      borderSide = BorderSide(color: Colors.red.shade200, width: 0.8);
+      child = Icon(Icons.block_flipped, color: Colors.red.shade400, size: 16);
+    } else if (status == SlotStatus.event) {
+      cellColor = const Color(0xFFF3E5F5); // Tím pastel sự kiện nổi bật
+      borderSide = const BorderSide(color: Color(0xFFCE93D8), width: 1.0);
+      child = Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: const [
+          Icon(Icons.emoji_events_rounded, color: Color(0xFF7B1FA2), size: 15),
+          SizedBox(height: 1),
+          Text(
+            "SỰ KIỆN",
+            style: TextStyle(
+              fontSize: 8,
+              fontWeight: FontWeight.bold,
+              color: Color(0xFF7B1FA2),
+              letterSpacing: -0.2,
+            ),
+            maxLines: 1,
+          ),
+        ],
+      );
     }
 
-    return Container(
-      width: width,
-      height: height,
-      decoration: BoxDecoration(
-        color: cellColor,
-        border: Border(
-          right: borderSide,
-          bottom: borderSide,
+    return Material(
+      color: cellColor,
+      child: InkWell(
+        onTap: onTap,
+        splashColor: isLockedSlot ? Colors.transparent : const Color(0xFF81C784).withValues(alpha: 0.4),
+        highlightColor: isLockedSlot ? Colors.transparent : const Color(0xFF81C784).withValues(alpha: 0.2),
+        child: Container(
+          width: width,
+          height: height,
+          decoration: BoxDecoration(
+            border: Border(
+              right: borderSide,
+              bottom: borderSide,
+            ),
+          ),
+          alignment: Alignment.center,
+          child: child,
         ),
       ),
-      alignment: Alignment.center,
-      child: child,
     );
   }
 
   // Thanh điều khiển Zoom Slider và thanh Checkout nổi
    Widget _buildBottomControls(List<CourtEntity> courts, SportsComplexEntity venue, List<String> timeLabels) {
     final hasSelection = _selectedSlots.isNotEmpty;
-    final totalAmount = _calculateTotalAmount(courts);
+    final totalAmount = _calculateTotalAmount(courts, venue.open_time);
     final totalHours = _selectedSlots.length * 0.5;
 
     return Container(
@@ -908,7 +1143,7 @@ class _VisualBookingPageState extends State<VisualBookingPage> {
                   ElevatedButton(
                     onPressed: hasSelection
                         ? () {
-                            final slotDetails = _buildSelectedSlotDetails(courts, timeLabels);
+                            final slotDetails = _buildSelectedSlotDetails(courts, timeLabels, venue.open_time);
                             final args = PaymentInfoArgs(
                               venue: venue,
                               date: _formatDateVN(_selectedDate),

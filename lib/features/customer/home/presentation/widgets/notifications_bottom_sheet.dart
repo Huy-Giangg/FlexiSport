@@ -49,7 +49,7 @@ class _NotificationsBottomSheetState extends State<NotificationsBottomSheet> wit
           .from('bookings')
           .select('*, booking_slots(*, courts(*, venues(*)))')
           .eq('user_id', _userId!)
-          .eq('status', 'completed');
+          .inFilter('status', ['completed', 'confirmed']);
       
       final bookingsList = bookingsResponse as List? ?? [];
       final List<Map<String, dynamic>> tempMatches = [];

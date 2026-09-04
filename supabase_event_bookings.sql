@@ -1,4 +1,6 @@
--- 1. Thêm các cột bổ sung vào bảng events nếu chưa tồn tại để lưu cấu hình vé sự kiện
+-- Bổ sung cột min_tickets (Số lượng vé tối thiểu để tổ chức sự kiện)
+ALTER TABLE events ADD COLUMN IF NOT EXISTS min_tickets INTEGER DEFAULT 2;
+
 ALTER TABLE events ADD COLUMN IF NOT EXISTS ticket_price DECIMAL(10, 2) DEFAULT 0.0;
 ALTER TABLE events ADD COLUMN IF NOT EXISTS max_tickets INTEGER DEFAULT 10;
 ALTER TABLE events ADD COLUMN IF NOT EXISTS sport_type VARCHAR(50) DEFAULT 'Pickleball';

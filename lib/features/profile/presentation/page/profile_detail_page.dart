@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:flexisport_app/core/theme/app_colors.dart';
 
 class ProfileDetailPage extends StatefulWidget {
   final User? user;
@@ -86,18 +88,37 @@ class _ProfileDetailPageState extends State<ProfileDetailPage> {
     if (_isLoading) {
       return Scaffold(
         appBar: AppBar(
-          backgroundColor: const Color(0xFF006D38),
           elevation: 0,
+          scrolledUnderElevation: 0,
+          flexibleSpace: Container(
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                colors: [
+                  AppColors.primaryContainer,
+                  AppColors.primary,
+                ],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+            ),
+          ),
           leading: IconButton(
             onPressed: () => context.pop(),
-            icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white),
+            icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white, size: 20),
           ),
-          title: const Text("Thông tin cá nhân", style: TextStyle(color: Colors.white, fontSize: 18)),
+          title: Text(
+            "Thông tin cá nhân",
+            style: GoogleFonts.lexend(
+              color: Colors.white,
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
           centerTitle: true,
         ),
         body: const Center(
           child: CircularProgressIndicator(
-            color: Color(0xFF006D38),
+            color: AppColors.primaryContainer,
           ),
         ),
       );
@@ -110,29 +131,37 @@ class _ProfileDetailPageState extends State<ProfileDetailPage> {
     return Scaffold(
       backgroundColor: const Color(0xFFF4F9F6),
       appBar: AppBar(
-        backgroundColor: const Color(0xFF006D38),
         elevation: 0,
+        scrolledUnderElevation: 0,
+        flexibleSpace: Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              colors: [
+                AppColors.primaryContainer,
+                AppColors.primary,
+              ],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+          ),
+        ),
         leading: IconButton(
           onPressed: () {
             context.pop();
           },
-          icon: Container(
-            height: 36,
-            width: 36,
-            decoration: BoxDecoration(
-              color: Colors.black.withOpacity(0.5),
-              shape: BoxShape.circle,
-            ),
-            child: const Icon(
-              Icons.arrow_back_ios_new_rounded,
-              color: Colors.white,
-              size: 20,
-            ),
+          icon: const Icon(
+            Icons.arrow_back_ios_new_rounded,
+            color: Colors.white,
+            size: 20,
           ),
         ),
-        title: const Text(
+        title: Text(
           "Thông tin cá nhân",
-          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18),
+          style: GoogleFonts.lexend(
+            color: Colors.white,
+            fontWeight: FontWeight.bold,
+            fontSize: 18,
+          ),
         ),
         centerTitle: true,
       ),
@@ -144,7 +173,14 @@ class _ProfileDetailPageState extends State<ProfileDetailPage> {
                 height: 180,
                 width: double.infinity,
                 decoration: const BoxDecoration(
-                  color: Color(0xFF006D38),
+                  gradient: LinearGradient(
+                    colors: [
+                      AppColors.primaryContainer,
+                      AppColors.primary,
+                    ],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
                   borderRadius: BorderRadius.vertical(
                     bottom: Radius.circular(24),
                   ),
@@ -215,7 +251,7 @@ class _ProfileDetailPageState extends State<ProfileDetailPage> {
                               height: 38,
                               width: 38,
                               decoration: BoxDecoration(
-                                color: Colors.black.withOpacity(0.5),
+                                color: Colors.black.withValues(alpha: 0.5),
                                 shape: BoxShape.circle,
                               ),
                               child: const Icon(Icons.edit_document, color: Colors.white),
@@ -244,7 +280,7 @@ class _ProfileDetailPageState extends State<ProfileDetailPage> {
             decoration: BoxDecoration(
               color: Colors.white,
               boxShadow: [
-                BoxShadow(blurRadius: 10, color: Colors.black.withOpacity(0.1)),
+                BoxShadow(blurRadius: 10, color: Colors.black.withValues(alpha: 0.1)),
               ],
               borderRadius: BorderRadius.circular(12),
             ),

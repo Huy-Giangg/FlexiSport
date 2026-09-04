@@ -31,6 +31,31 @@ import 'package:flexisport_app/core/config/app_config.dart';
 import 'package:flexisport_app/features/customer/matchmaking/data/datasources/matchmaking_remote_datasource.dart';
 import 'package:flexisport_app/features/customer/matchmaking/data/repositories/matchmaking_repository_impl.dart';
 import 'package:flexisport_app/features/customer/matchmaking/presentation/providers/matchmaking_provider.dart';
+import 'package:flexisport_app/features/owner/court_management/data/datasources/owner_court_remote_datasource.dart';
+import 'package:flexisport_app/features/owner/court_management/data/repositories/owner_court_repository_impl.dart';
+import 'package:flexisport_app/features/owner/court_management/domain/usecases/add_court_usecase.dart';
+import 'package:flexisport_app/features/owner/court_management/domain/usecases/add_venue_usecase.dart';
+import 'package:flexisport_app/features/owner/court_management/domain/usecases/block_court_slot_usecase.dart';
+import 'package:flexisport_app/features/owner/court_management/domain/usecases/delete_court_usecase.dart';
+import 'package:flexisport_app/features/owner/court_management/domain/usecases/delete_venue_usecase.dart';
+import 'package:flexisport_app/features/owner/court_management/domain/usecases/get_court_slots_status_usecase.dart';
+import 'package:flexisport_app/features/owner/court_management/domain/usecases/get_owner_courts_usecase.dart';
+import 'package:flexisport_app/features/owner/court_management/domain/usecases/get_owner_venues_usecase.dart';
+import 'package:flexisport_app/features/owner/court_management/domain/usecases/toggle_court_status_usecase.dart';
+import 'package:flexisport_app/features/owner/court_management/domain/usecases/unblock_court_slot_usecase.dart';
+import 'package:flexisport_app/features/owner/court_management/domain/usecases/update_court_usecase.dart';
+import 'package:flexisport_app/features/owner/court_management/domain/usecases/update_venue_info_usecase.dart';
+import 'package:flexisport_app/features/owner/booking_management/data/datasources/owner_booking_remote_datasource.dart';
+import 'package:flexisport_app/features/owner/booking_management/data/repositories/owner_booking_repository_impl.dart';
+import 'package:flexisport_app/features/owner/booking_management/domain/usecases/cancel_booking_usecase.dart';
+import 'package:flexisport_app/features/owner/booking_management/domain/usecases/create_walkin_booking_usecase.dart';
+import 'package:flexisport_app/features/owner/booking_management/domain/usecases/get_owner_bookings_usecase.dart';
+import 'package:flexisport_app/features/owner/booking_management/domain/usecases/update_booking_status_usecase.dart';
+import 'package:flexisport_app/features/owner/booking_management/domain/usecases/update_payment_status_usecase.dart';
+import 'package:flexisport_app/features/owner/booking_management/presentation/providers/owner_booking_provider.dart';
+import 'package:flexisport_app/features/owner/court_management/presentation/providers/owner_court_provider.dart';
+import 'package:flexisport_app/features/owner/event_management/data/datasources/owner_event_remote_datasource.dart';
+import 'package:flexisport_app/features/owner/event_management/presentation/providers/owner_event_provider.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -76,6 +101,34 @@ void main() async {
   final matchmakingDataSource = MatchmakingRemoteDatasource(Supabase.instance.client);
   final matchmakingRepository = MatchmakingRepositoryImpl(matchmakingDataSource);
 
+  // Owner Court Management dependencies
+  final ownerCourtRemoteDataSource = OwnerCourtRemoteDataSource(Supabase.instance.client);
+  final ownerCourtRepository = OwnerCourtRepositoryImpl(ownerCourtRemoteDataSource);
+  final getOwnerVenuesUseCase = GetOwnerVenuesUseCase(ownerCourtRepository);
+  final addVenueUseCase = AddVenueUseCase(ownerCourtRepository);
+  final deleteVenueUseCase = DeleteVenueUseCase(ownerCourtRepository);
+  final getOwnerCourtsUseCase = GetOwnerCourtsUseCase(ownerCourtRepository);
+  final addCourtUseCase = AddCourtUseCase(ownerCourtRepository);
+  final updateCourtUseCase = UpdateCourtUseCase(ownerCourtRepository);
+  final deleteCourtUseCase = DeleteCourtUseCase(ownerCourtRepository);
+  final toggleCourtStatusUseCase = ToggleCourtStatusUseCase(ownerCourtRepository);
+  final getCourtSlotsStatusUseCase = GetCourtSlotsStatusUseCase(ownerCourtRepository);
+  final blockCourtSlotUseCase = BlockCourtSlotUseCase(ownerCourtRepository);
+  final unblockCourtSlotUseCase = UnblockCourtSlotUseCase(ownerCourtRepository);
+  final updateVenueInfoUseCase = UpdateVenueInfoUseCase(ownerCourtRepository);
+
+  // Owner Booking Management dependencies
+  final ownerBookingRemoteDataSource = OwnerBookingRemoteDataSource(Supabase.instance.client);
+  final ownerBookingRepository = OwnerBookingRepositoryImpl(ownerBookingRemoteDataSource);
+  final getOwnerBookingsUseCase = GetOwnerBookingsUseCase(ownerBookingRepository);
+  final updateBookingStatusUseCase = UpdateBookingStatusUseCase(ownerBookingRepository);
+  final updatePaymentStatusUseCase = UpdatePaymentStatusUseCase(ownerBookingRepository);
+  final createWalkInBookingUseCase = CreateWalkInBookingUseCase(ownerBookingRepository);
+  final cancelBookingUseCase = CancelBookingUseCase(ownerBookingRepository);
+
+  // Owner Event Management dependencies
+  final ownerEventRemoteDataSource = OwnerEventRemoteDataSource(Supabase.instance.client);
+
   runApp(
     MultiProvider(
       providers: [
@@ -104,6 +157,37 @@ void main() async {
         ),
         ChangeNotifierProvider(
           create: (_) => MatchmakingProvider(repository: matchmakingRepository),
+        ),
+        ChangeNotifierProvider(
+          create: (_) => OwnerCourtProvider(
+            getOwnerVenuesUseCase: getOwnerVenuesUseCase,
+            addVenueUseCase: addVenueUseCase,
+            deleteVenueUseCase: deleteVenueUseCase,
+            getOwnerCourtsUseCase: getOwnerCourtsUseCase,
+            addCourtUseCase: addCourtUseCase,
+            updateCourtUseCase: updateCourtUseCase,
+            deleteCourtUseCase: deleteCourtUseCase,
+            toggleCourtStatusUseCase: toggleCourtStatusUseCase,
+            getCourtSlotsStatusUseCase: getCourtSlotsStatusUseCase,
+            blockCourtSlotUseCase: blockCourtSlotUseCase,
+            unblockCourtSlotUseCase: unblockCourtSlotUseCase,
+            updateVenueInfoUseCase: updateVenueInfoUseCase,
+          ),
+        ),
+        ChangeNotifierProvider(
+          create: (_) => OwnerBookingProvider(
+            getOwnerBookingsUseCase: getOwnerBookingsUseCase,
+            updateBookingStatusUseCase: updateBookingStatusUseCase,
+            updatePaymentStatusUseCase: updatePaymentStatusUseCase,
+            createWalkInBookingUseCase: createWalkInBookingUseCase,
+            cancelBookingUseCase: cancelBookingUseCase,
+            getOwnerVenuesUseCase: getOwnerVenuesUseCase,
+          ),
+        ),
+        ChangeNotifierProvider(
+          create: (_) => OwnerEventProvider(
+            remoteDataSource: ownerEventRemoteDataSource,
+          ),
         ),
       ],
 

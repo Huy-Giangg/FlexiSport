@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import 'package:flexisport_app/core/theme/app_colors.dart';
+import 'package:flexisport_app/features/customer/home/presentation/widgets/header_widget.dart';
 import 'package:flexisport_app/features/customer/booking/presentation/providers/booking_provider.dart';
 import 'package:flexisport_app/features/customer/booking/domain/entities/event_entity.dart';
 import 'package:flexisport_app/features/customer/home/presentation/providers/main_page_provider.dart';
@@ -16,47 +17,28 @@ class DiscoverPage extends StatefulWidget {
 
 class _DiscoverPageState extends State<DiscoverPage> {
   final TextEditingController _searchController = TextEditingController();
-  String _selectedCategory = 'Tất cả'; // 'Tất cả', 'Sự kiện', 'Ưu đãi'
+  String _selectedSport = 'Tất cả';
+  String _selectedLevel = 'Tất cả';
   String _searchQuery = '';
 
-  // Mock promotions data
-  final List<Map<String, dynamic>> _promotions = [
-    {
-      'code': 'FLEXINEW',
-      'title': 'Ưu đãi thành viên mới',
-      'description': 'Giảm ngay 20% cho lượt đặt sân đầu tiên của bạn.',
-      'discount': 'Giảm 20%',
-      'expiry': '30/06/2026',
-      'colorStart': const Color(0xFFF39C12),
-      'colorEnd': const Color(0xFFE67E22),
-    },
-    {
-      'code': 'GOLDENHOUR',
-      'title': 'Khung giờ vàng giá sốc',
-      'description': 'Đồng giá 80k/giờ cho tất cả các sân từ 12:00 - 14:00.',
-      'discount': 'Đồng giá 80k',
-      'expiry': '15/07/2026',
-      'colorStart': const Color(0xFF9B59B6),
-      'colorEnd': const Color(0xFF8E44AD),
-    },
-    {
-      'code': 'STUDENT15',
-      'title': 'Ưu đãi học sinh - sinh viên',
-      'description': 'Giảm 15% tổng hóa đơn khi xuất trình thẻ HSSV.',
-      'discount': 'Giảm 15%',
-      'expiry': '31/12/2026',
-      'colorStart': const Color(0xFF1ABC9C),
-      'colorEnd': const Color(0xFF16A085),
-    },
-    {
-      'code': 'SUMMER2026',
-      'title': 'Chào hè rực rỡ',
-      'description': 'Giảm giá 50k cho các booking đặt từ 3 tiếng trở lên.',
-      'discount': 'Giảm 50k',
-      'expiry': '31/08/2026',
-      'colorStart': const Color(0xFFE74C3C),
-      'colorEnd': const Color(0xFFC0392B),
-    },
+  final List<Map<String, dynamic>> _sportsFilter = [
+    {'name': 'Tất cả', 'icon': Icons.grid_view_rounded},
+    {'name': 'Pickleball', 'icon': Icons.sports_tennis_rounded},
+    {'name': 'Cầu lông', 'icon': Icons.sports_tennis_outlined},
+    {'name': 'Bóng đá', 'icon': Icons.sports_soccer_rounded},
+    {'name': 'Tennis', 'icon': Icons.sports_baseball_rounded},
+    {'name': 'Bóng rổ', 'icon': Icons.sports_basketball_rounded},
+    {'name': 'Bóng bàn', 'icon': Icons.sports_baseball_outlined},
+    {'name': 'Bơi lội', 'icon': Icons.pool_rounded},
+    {'name': 'Khác', 'icon': Icons.sports_outlined},
+  ];
+
+  final List<String> _levelsList = [
+    'Tất cả',
+    'Mọi trình độ',
+    'Người mới (Cơ bản)',
+    'Trung bình (Phong trào)',
+    'Nâng cao / Bán chuyên',
   ];
 
   @override
@@ -76,6 +58,7 @@ class _DiscoverPageState extends State<DiscoverPage> {
   }
 
   String _formatVND(double amount) {
+    if (amount <= 0) return "Miễn phí";
     final String str = amount.toInt().toString();
     final buffer = StringBuffer();
     for (int i = 0; i < str.length; i++) {
@@ -84,12 +67,13 @@ class _DiscoverPageState extends State<DiscoverPage> {
       }
       buffer.write(str[i]);
     }
-    return "${buffer.toString()}đ";
+    return "${buffer.toString()} đ";
   }
 
   String _formatDate(String dateStr) {
     try {
-      final parts = dateStr.split('T')[0].split('-');
+      final clean = dateStr.split('T')[0].split(' ')[0].trim();
+      final parts = clean.split('-');
       if (parts.length == 3) {
         return "${parts[2]}/${parts[1]}/${parts[0]}";
       }
@@ -97,251 +81,330 @@ class _DiscoverPageState extends State<DiscoverPage> {
     return dateStr;
   }
 
+  String _cleanTime(String timeStr) {
+    final parts = timeStr.split(':');
+    if (parts.length >= 2) {
+      return "${parts[0].padLeft(2, '0')}:${parts[1].padLeft(2, '0')}";
+    }
+    return timeStr;
+  }
+
+  bool _isEventExpired(EventEntity event) {
+    if (!event.isActive) return true;
+    if (event.eventDate.isEmpty) return false;
+
+    try {
+      final cleanDate = event.eventDate.split('T')[0].split(' ')[0].trim();
+      final dateParts = cleanDate.split('-');
+      if (dateParts.length != 3) return false;
+
+      final year = int.tryParse(dateParts[0]) ?? 0;
+      final month = int.tryParse(dateParts[1]) ?? 0;
+      final day = int.tryParse(dateParts[2]) ?? 0;
+
+      int endHour = 23;
+      int endMinute = 59;
+
+      if (event.endTime.isNotEmpty) {
+        final timeParts = event.endTime.trim().split(':');
+        if (timeParts.isNotEmpty) {
+          endHour = int.tryParse(timeParts[0]) ?? endHour;
+        }
+        if (timeParts.length >= 2) {
+          endMinute = int.tryParse(timeParts[1]) ?? endMinute;
+        }
+      }
+
+      final endDateTime = DateTime(year, month, day, endHour, endMinute);
+      return DateTime.now().isAfter(endDateTime);
+    } catch (_) {
+      return false;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final bookingProvider = context.watch<BookingProvider>();
     final allEvents = bookingProvider.events;
 
-    // Filter events
+    // Lọc sự kiện theo môn thể thao, trình độ, tìm kiếm và bỏ qua sự kiện hết hạn
     final filteredEvents = allEvents.where((event) {
-      final matchesSearch =
+      // 0. Bỏ qua các sự kiện đã kết thúc/hết hạn
+      if (_isEventExpired(event)) return false;
+
+      // 1. Lọc theo từ khóa tìm kiếm
+      final matchesSearch = _searchQuery.isEmpty ||
           event.title.toLowerCase().contains(_searchQuery.toLowerCase()) ||
+          event.courtName.toLowerCase().contains(_searchQuery.toLowerCase()) ||
           event.sportType.toLowerCase().contains(_searchQuery.toLowerCase()) ||
           event.level.toLowerCase().contains(_searchQuery.toLowerCase());
-      return matchesSearch;
-    }).toList();
 
-    // Filter promotions
-    final filteredPromotions = _promotions.where((promo) {
-      final matchesSearch =
-          promo['title'].toString().toLowerCase().contains(
-            _searchQuery.toLowerCase(),
-          ) ||
-          promo['code'].toString().toLowerCase().contains(
-            _searchQuery.toLowerCase(),
-          ) ||
-          promo['description'].toString().toLowerCase().contains(
-            _searchQuery.toLowerCase(),
-          );
-      return matchesSearch;
+      // 2. Lọc theo môn thể thao
+      final matchesSport = _selectedSport == 'Tất cả' ||
+          event.sportType.toLowerCase() == _selectedSport.toLowerCase();
+
+      // 3. Lọc theo trình độ
+      final matchesLevel = _selectedLevel == 'Tất cả' ||
+          event.level.toLowerCase() == _selectedLevel.toLowerCase() ||
+          event.level == 'Mọi trình độ';
+
+      return matchesSearch && matchesSport && matchesLevel;
     }).toList();
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: const Color(0xFFF6F8F6),
       appBar: AppBar(
-        title: const Text(
-          "Khám Phá",
-          style: TextStyle(
-            fontSize: 20,
+        elevation: 0,
+        scrolledUnderElevation: 0,
+        flexibleSpace: Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              colors: [
+                AppColors.primaryContainer,
+                AppColors.primary,
+              ],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+          ),
+        ),
+        title: Text(
+          "Sự Kiện & Giải Đấu",
+          style: GoogleFonts.lexend(
+            fontSize: 18,
             fontWeight: FontWeight.bold,
             color: Colors.white,
           ),
         ),
-        backgroundColor: const Color(0xFF006D38),
         centerTitle: true,
-        elevation: 0,
+        actions: const [
+          Padding(
+            padding: EdgeInsets.only(right: 6),
+            child: NotificationIconWidget(opacity: 1.0),
+          ),
+        ],
       ),
       body: Column(
         children: [
-          // Header / Search Bar area
+          // Header xanh lá chứa ô tìm kiếm và bộ lọc môn thể thao dạng chip
           Container(
             padding: const EdgeInsets.only(
               left: 16,
               right: 16,
               bottom: 16,
-              top: 12,
+              top: 8,
             ),
             decoration: const BoxDecoration(
-              color: Color(0xFF006D38),
+              gradient: LinearGradient(
+                colors: [
+                  AppColors.primaryContainer,
+                  AppColors.primary,
+                ],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
               borderRadius: BorderRadius.only(
-                bottomLeft: Radius.circular(20),
-                bottomRight: Radius.circular(20),
+                bottomLeft: Radius.circular(24),
+                bottomRight: Radius.circular(24),
               ),
             ),
             child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Search Input Field
-                TextField(
-                  controller: _searchController,
-                  onChanged: (val) {
-                    setState(() {
-                      _searchQuery = val;
-                    });
-                  },
-                  decoration: InputDecoration(
-                    hintText: "Tìm kiếm sự kiện, mã giảm giá...",
-                    hintStyle: const TextStyle(color: Colors.black38),
-                    prefixIcon: const Icon(Icons.search, color: Colors.grey),
-                    suffixIcon: _searchQuery.isNotEmpty
-                        ? IconButton(
-                            icon: const Icon(Icons.clear, color: Colors.grey),
-                            onPressed: () {
-                              setState(() {
-                                _searchController.clear();
-                                _searchQuery = '';
-                              });
-                            },
-                          )
-                        : null,
-                    filled: true,
-                    fillColor: Colors.white,
-                    contentPadding: const EdgeInsets.symmetric(
-                      vertical: 0,
-                      horizontal: 16,
-                    ),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(30),
-                      borderSide: BorderSide.none,
+                // Ô tìm kiếm hiện đại
+                Container(
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(30),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.08),
+                        blurRadius: 10,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  child: TextField(
+                    controller: _searchController,
+                    onChanged: (val) {
+                      setState(() {
+                        _searchQuery = val.trim();
+                      });
+                    },
+                    style: GoogleFonts.lexend(fontSize: 14),
+                    decoration: InputDecoration(
+                      hintText: "Tìm giải đấu, sự kiện, sân đấu...",
+                      hintStyle: GoogleFonts.lexend(
+                        color: Colors.grey.shade400,
+                        fontSize: 13,
+                      ),
+                      prefixIcon: const Icon(Icons.search_rounded, color: AppColors.primaryContainer),
+                      suffixIcon: _searchQuery.isNotEmpty
+                          ? IconButton(
+                              icon: const Icon(Icons.close_rounded, color: Colors.grey, size: 18),
+                              onPressed: () {
+                                setState(() {
+                                  _searchController.clear();
+                                  _searchQuery = '';
+                                });
+                              },
+                            )
+                          : null,
+                      border: InputBorder.none,
+                      contentPadding: const EdgeInsets.symmetric(
+                        vertical: 13,
+                        horizontal: 16,
+                      ),
                     ),
                   ),
                 ),
-                const SizedBox(height: 12),
-                // Category Chips
-                Row(
-                  children: [
-                    _buildCategoryChip('Tất cả'),
-                    const SizedBox(width: 8),
-                    _buildCategoryChip('Sự kiện'),
-                    const SizedBox(width: 8),
-                    _buildCategoryChip('Ưu đãi'),
-                  ],
+                const SizedBox(height: 14),
+
+                // Thanh trượt bộ lọc môn thể thao
+                SizedBox(
+                  height: 38,
+                  child: ListView.separated(
+                    scrollDirection: Axis.horizontal,
+                    itemCount: _sportsFilter.length,
+                    separatorBuilder: (context, index) => const SizedBox(width: 8),
+                    itemBuilder: (context, index) {
+                      final item = _sportsFilter[index];
+                      final isSelected = _selectedSport == item['name'];
+                      return _buildSportChip(
+                        name: item['name'] as String,
+                        icon: item['icon'] as IconData,
+                        isSelected: isSelected,
+                      );
+                    },
+                  ),
                 ),
               ],
             ),
           ),
+
+          // Thanh phụ: Đếm số lượng & Bộ lọc trình độ
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Row(
+                  children: [
+                    Text(
+                      "Danh sách sự kiện",
+                      style: GoogleFonts.lexend(
+                        fontSize: 15,
+                        fontWeight: FontWeight.bold,
+                        color: const Color(0xFF1B1C19),
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: AppColors.primaryContainer.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Text(
+                        "${filteredEvents.length}",
+                        style: GoogleFonts.lexend(
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                          color: AppColors.primaryContainer,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+
+                // Dropdown chọn trình độ nhanh
+                PopupMenuButton<String>(
+                  initialValue: _selectedLevel,
+                  onSelected: (val) {
+                    setState(() {
+                      _selectedLevel = val;
+                    });
+                  },
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: Colors.grey.shade300),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.filter_list_rounded,
+                          size: 14,
+                          color: _selectedLevel == 'Tất cả' ? Colors.grey.shade600 : AppColors.primaryContainer,
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          _selectedLevel == 'Tất cả' ? "Trình độ" : _selectedLevel,
+                          style: GoogleFonts.lexend(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: _selectedLevel == 'Tất cả' ? Colors.grey.shade700 : AppColors.primaryContainer,
+                          ),
+                        ),
+                        const SizedBox(width: 2),
+                        Icon(Icons.keyboard_arrow_down_rounded, size: 16, color: Colors.grey.shade600),
+                      ],
+                    ),
+                  ),
+                  itemBuilder: (context) => _levelsList.map((level) {
+                    return PopupMenuItem<String>(
+                      value: level,
+                      child: Row(
+                        children: [
+                          if (_selectedLevel == level)
+                            const Icon(Icons.check_rounded, color: AppColors.primaryContainer, size: 16)
+                          else
+                            const SizedBox(width: 16),
+                          const SizedBox(width: 8),
+                          Text(
+                            level,
+                            style: GoogleFonts.lexend(
+                              fontSize: 13,
+                              fontWeight: _selectedLevel == level ? FontWeight.bold : FontWeight.normal,
+                              color: _selectedLevel == level ? AppColors.primaryContainer : Colors.black87,
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  }).toList(),
+                ),
+              ],
+            ),
+          ),
+
+          // Danh sách sự kiện
           Expanded(
             child: bookingProvider.isLoading
                 ? const Center(
-                    child: CircularProgressIndicator(color: Color(0xFF006D38)),
+                    child: CircularProgressIndicator(color: AppColors.primaryContainer),
                   )
                 : RefreshIndicator(
                     onRefresh: () async {
                       await bookingProvider.loadEvents('');
                     },
-                    color: const Color(0xFF006D38),
-                    child: ListView(
-                      physics: const AlwaysScrollableScrollPhysics(),
-                      padding: const EdgeInsets.all(16),
-                      children: [
-                        // PROMOTIONS SECTION
-                        if (_selectedCategory == 'Tất cả' ||
-                            _selectedCategory == 'Ưu đãi') ...[
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              const Text(
-                                "Chương trình ưu đãi",
-                                style: TextStyle(
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.bold,
-                                  color: Color(0xFF1B1C19),
-                                ),
-                              ),
-                              if (filteredPromotions.length > 1)
-                                Text(
-                                  "${filteredPromotions.length} ưu đãi",
-                                  style: const TextStyle(
-                                    color: Colors.grey,
-                                    fontSize: 13,
-                                  ),
-                                ),
-                            ],
+                    color: AppColors.primaryContainer,
+                    child: filteredEvents.isEmpty
+                        ? _buildEmptyState()
+                        : ListView.builder(
+                            physics: const AlwaysScrollableScrollPhysics(),
+                            padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
+                            itemCount: filteredEvents.length,
+                            itemBuilder: (context, index) {
+                              final event = filteredEvents[index];
+                              final bookedCount =
+                                  bookingProvider.eventBookedTicketsCount[event.id] ?? 0;
+                              return _buildModernEventCard(event, bookedCount);
+                            },
                           ),
-                          const SizedBox(height: 12),
-                          if (filteredPromotions.isEmpty)
-                            Container(
-                              height: 120,
-                              alignment: Alignment.center,
-                              decoration: BoxDecoration(
-                                color: Colors.white,
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: const Text(
-                                "Không tìm thấy ưu đãi nào!",
-                                style: TextStyle(color: Colors.grey),
-                              ),
-                            )
-                          else
-                            SizedBox(
-                              height: 160,
-                              child: ListView.builder(
-                                scrollDirection: Axis.horizontal,
-                                itemCount: filteredPromotions.length,
-                                itemBuilder: (context, index) {
-                                  final promo = filteredPromotions[index];
-                                  return _buildPromotionCard(promo);
-                                },
-                              ),
-                            ),
-                          const SizedBox(height: 24),
-                        ],
-
-                        // EVENTS SECTION
-                        if (_selectedCategory == 'Tất cả' ||
-                            _selectedCategory == 'Sự kiện') ...[
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              const Text(
-                                "Sự kiện thể thao nổi bật",
-                                style: TextStyle(
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.bold,
-                                  color: Color(0xFF1B1C19),
-                                ),
-                              ),
-                              if (filteredEvents.isNotEmpty)
-                                Text(
-                                  "${filteredEvents.length} sự kiện",
-                                  style: const TextStyle(
-                                    color: Colors.grey,
-                                    fontSize: 13,
-                                  ),
-                                ),
-                            ],
-                          ),
-                          const SizedBox(height: 12),
-                          if (filteredEvents.isEmpty)
-                            Container(
-                              height: 160,
-                              alignment: Alignment.center,
-                              decoration: BoxDecoration(
-                                color: Colors.white,
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: const Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Icon(
-                                    Icons.event_note,
-                                    color: Colors.grey,
-                                    size: 40,
-                                  ),
-                                  SizedBox(height: 8),
-                                  Text(
-                                    "Không tìm thấy sự kiện nào!",
-                                    style: TextStyle(color: Colors.grey),
-                                  ),
-                                ],
-                              ),
-                            )
-                          else
-                            ListView.builder(
-                              shrinkWrap: true,
-                              physics: const NeverScrollableScrollPhysics(),
-                              itemCount: filteredEvents.length,
-                              itemBuilder: (context, index) {
-                                final event = filteredEvents[index];
-                                final bookedCount =
-                                    bookingProvider
-                                        .eventBookedTicketsCount[event.id] ??
-                                    0;
-                                return _buildEventCard(event, bookedCount);
-                              },
-                            ),
-                        ],
-                      ],
-                    ),
                   ),
           ),
         ],
@@ -349,347 +412,376 @@ class _DiscoverPageState extends State<DiscoverPage> {
     );
   }
 
-  Widget _buildCategoryChip(String category) {
-    final isSelected = _selectedCategory == category;
+  // Widget Chip bộ lọc môn thể thao
+  Widget _buildSportChip({
+    required String name,
+    required IconData icon,
+    required bool isSelected,
+  }) {
     return GestureDetector(
       onTap: () {
         setState(() {
-          _selectedCategory = category;
+          _selectedSport = name;
         });
       },
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
         decoration: BoxDecoration(
-          color: isSelected ? Colors.white : Colors.white.withOpacity(0.15),
+          color: isSelected ? Colors.white : Colors.white.withValues(alpha: 0.18),
           borderRadius: BorderRadius.circular(20),
+          border: isSelected
+              ? Border.all(color: Colors.white, width: 1.2)
+              : Border.all(color: Colors.white.withValues(alpha: 0.25), width: 0.8),
+          boxShadow: isSelected
+              ? [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.12),
+                    blurRadius: 6,
+                    offset: const Offset(0, 2),
+                  ),
+                ]
+              : null,
         ),
-        child: Text(
-          category,
-          style: TextStyle(
-            color: isSelected ? const Color(0xFF006D38) : Colors.white,
-            fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-            fontSize: 14,
-          ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              icon,
+              size: 15,
+              color: isSelected ? AppColors.primaryContainer : Colors.white,
+            ),
+            const SizedBox(width: 6),
+            Text(
+              name,
+              style: GoogleFonts.lexend(
+                color: isSelected ? AppColors.primaryContainer : Colors.white,
+                fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                fontSize: 13,
+              ),
+            ),
+          ],
         ),
       ),
     );
   }
 
-  Widget _buildPromotionCard(Map<String, dynamic> promo) {
+  // Thẻ sự kiện thiết kế hiện đại
+  Widget _buildModernEventCard(EventEntity event, int bookedCount) {
+    final maxAvailable = (event.maxTickets - bookedCount).clamp(0, event.maxTickets);
+    final isFull = maxAvailable <= 0;
+    final progress = event.maxTickets > 0 ? (bookedCount / event.maxTickets).clamp(0.0, 1.0) : 0.0;
+
     return Container(
-      width: 280,
-      margin: const EdgeInsets.only(right: 12),
+      margin: const EdgeInsets.only(bottom: 14),
       decoration: BoxDecoration(
+        color: Colors.white,
         borderRadius: BorderRadius.circular(16),
-        gradient: LinearGradient(
-          colors: [promo['colorStart'] as Color, promo['colorEnd'] as Color],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
+        border: Border.all(color: Colors.grey.shade200),
         boxShadow: [
           BoxShadow(
-            color: (promo['colorStart'] as Color).withOpacity(0.3),
-            blurRadius: 8,
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 10,
             offset: const Offset(0, 4),
           ),
         ],
       ),
-      child: Stack(
-        children: [
-          // Background pattern
-          Positioned(
-            right: -20,
-            bottom: -20,
-            child: Icon(
-              Icons.local_offer,
-              size: 100,
-              color: Colors.white.withOpacity(0.12),
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(16),
+        child: InkWell(
+          onTap: () {
+            context.read<MainPageProvider>().hideNavbar();
+            context.push(
+              '/EventBookingDetailPage',
+              extra: {
+                'event': event,
+                'bookedCount': bookedCount,
+                'showNavbarOnPop': true,
+              },
+            );
+          },
+          borderRadius: BorderRadius.circular(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Banner ảnh hoặc Header màu sắc theo môn
+              Stack(
+                children: [
+                  if (event.bannerUrl != null && event.bannerUrl!.isNotEmpty)
+                    ClipRRect(
+                      borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+                      child: Image.network(
+                        event.bannerUrl!,
+                        height: 120,
+                        width: double.infinity,
+                        fit: BoxFit.cover,
+                        errorBuilder: (context, error, stackTrace) =>
+                            _buildSportDefaultBanner(event.sportType),
+                      ),
+                    )
+                  else
+                    _buildSportDefaultBanner(event.sportType),
+
+                  // Lớp Gradient phủ bóng
+                  Positioned.fill(
+                    child: Container(
+                      decoration: BoxDecoration(
+                        borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+                        gradient: LinearGradient(
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                          colors: [
+                            Colors.black.withValues(alpha: 0.15),
+                            Colors.black.withValues(alpha: 0.65),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+
+                  // Tag môn thể thao & Trình độ
+                  Positioned(
+                    top: 10,
+                    left: 10,
+                    child: Row(
                       children: [
                         Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 10,
-                            vertical: 4,
-                          ),
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                           decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.25),
-                            borderRadius: BorderRadius.circular(20),
+                            color: const Color(0xFF006D38),
+                            borderRadius: BorderRadius.circular(8),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withValues(alpha: 0.2),
+                                blurRadius: 4,
+                              ),
+                            ],
                           ),
-                          child: Text(
-                            promo['discount'].toString(),
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.bold,
-                              fontSize: 12,
-                            ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(Icons.emoji_events_rounded, color: Colors.amber, size: 13),
+                              const SizedBox(width: 4),
+                              Text(
+                                event.sportType,
+                                style: GoogleFonts.lexend(
+                                  color: Colors.white,
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ],
                           ),
                         ),
-                        Text(
-                          "HSD: ${promo['expiry']}",
-                          style: TextStyle(
-                            color: Colors.white.withOpacity(0.9),
-                            fontSize: 11,
+                        const SizedBox(width: 6),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: Colors.black.withValues(alpha: 0.6),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Text(
+                            event.level,
+                            style: GoogleFonts.lexend(
+                              color: Colors.white,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w500,
+                            ),
                           ),
                         ),
                       ],
                     ),
-                    const SizedBox(height: 10),
-                    Text(
-                      promo['title'].toString(),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 16,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      promo['description'].toString(),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: Colors.white.withOpacity(0.85),
-                        fontSize: 12,
-                        height: 1.3,
-                      ),
-                    ),
-                  ],
-                ),
-                Expanded(
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        "Mã: ${promo['code']}",
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 14,
-                          letterSpacing: 0.5,
-                        ),
-                      ),
-                      ElevatedButton(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.white,
-                          foregroundColor: promo['colorEnd'] as Color,
-                          elevation: 0,
-                          minimumSize: const Size(80, 32),
-                          padding: const EdgeInsets.symmetric(horizontal: 12),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(20),
-                          ),
-                        ),
-                        onPressed: () {
-                          Clipboard.setData(
-                            ClipboardData(text: promo['code'].toString()),
-                          );
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text(
-                                "Đã sao chép mã '${promo['code']}' thành công!",
-                              ),
-                              duration: const Duration(seconds: 2),
-                              behavior: SnackBarBehavior.floating,
-                              backgroundColor: promo['colorEnd'] as Color,
-                            ),
-                          );
-                        },
-                        child: const Text(
-                          "Lấy mã",
-                          style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 12,
-                          ),
-                        ),
-                      ),
-                    ],
                   ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
 
-  Widget _buildEventCard(EventEntity event, int bookedCount) {
-    final maxAvailable = event.maxTickets - bookedCount;
-    final isFull = maxAvailable <= 0;
-
-    return Card(
-      margin: const EdgeInsets.only(bottom: 12),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      elevation: 2,
-      color: Colors.white,
-      child: InkWell(
-        onTap: () {
-          // Go to event booking detail page
-          context.read<MainPageProvider>().hideNavbar();
-          context.push(
-            '/EventBookingDetailPage',
-            extra: {
-              'event': event,
-              'bookedCount': bookedCount,
-              'showNavbarOnPop': true,
-            },
-          );
-        },
-        borderRadius: BorderRadius.circular(16),
-        child: Padding(
-          padding: const EdgeInsets.all(12.0),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Left: Event Cover / Icon
-              Container(
-                width: 90,
-                height: 90,
-                decoration: BoxDecoration(
-                  color: const Color(0xFFCFE5DA),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    const Icon(
-                      Icons.emoji_events_outlined,
-                      size: 36,
-                      color: Color(0xFF006D38),
-                    ),
-                    const SizedBox(height: 4),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 6,
-                        vertical: 2,
-                      ),
+                  // Trạng thái vé (Đang mở / Hết vé)
+                  Positioned(
+                    top: 10,
+                    right: 10,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                       decoration: BoxDecoration(
-                        color: const Color(0xFF006D38),
+                        color: isFull ? const Color(0xFFD32F2F) : const Color(0xFF2E7D32),
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: Text(
-                        event.sportType,
-                        style: const TextStyle(
+                        isFull ? "HẾT VÉ" : "ĐANG MỞ",
+                        style: GoogleFonts.lexend(
                           color: Colors.white,
                           fontSize: 10,
                           fontWeight: FontWeight.bold,
                         ),
                       ),
                     ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 12),
+                  ),
 
-              // Right: Event Details
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 6,
-                            vertical: 2,
-                          ),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFF3A8DEE).withOpacity(0.1),
-                            borderRadius: BorderRadius.circular(4),
-                          ),
-                          child: Text(
-                            event.level,
-                            style: const TextStyle(
-                              color: Color(0xFF3A8DEE),
-                              fontSize: 10,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ),
-                        Text(
-                          isFull ? "Hết vé" : "Còn $maxAvailable vé",
-                          style: TextStyle(
-                            color: isFull ? Colors.red : Colors.green,
-                            fontSize: 11,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 6),
-                    Text(
+                  // Tiêu đề sự kiện nổi trên banner
+                  Positioned(
+                    bottom: 10,
+                    left: 12,
+                    right: 12,
+                    child: Text(
                       event.title,
-                      style: const TextStyle(
+                      style: GoogleFonts.lexend(
+                        color: Colors.white,
+                        fontSize: 16,
                         fontWeight: FontWeight.bold,
-                        fontSize: 15,
-                        color: Colors.black87,
+                        shadows: [
+                          const Shadow(
+                            color: Colors.black54,
+                            blurRadius: 4,
+                            offset: Offset(0, 1),
+                          ),
+                        ],
                       ),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
-                    const SizedBox(height: 4),
+                  ),
+                ],
+              ),
+
+              // Nội dung chi tiết sự kiện
+              Padding(
+                padding: const EdgeInsets.all(12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Sân thi đấu
                     Row(
                       children: [
-                        const Icon(
-                          Icons.calendar_today,
-                          size: 12,
-                          color: Colors.grey,
-                        ),
-                        const SizedBox(width: 4),
-                        Text(
-                          _formatDate(event.eventDate),
-                          style: const TextStyle(
-                            color: Colors.grey,
-                            fontSize: 12,
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        const Icon(
-                          Icons.access_time,
-                          size: 12,
-                          color: Colors.grey,
-                        ),
-                        const SizedBox(width: 4),
-                        Text(
-                          "${event.startTime} - ${event.endTime}",
-                          style: const TextStyle(
-                            color: Colors.grey,
-                            fontSize: 12,
+                        const Icon(Icons.stadium_outlined, size: 15, color: Color(0xFF006D38)),
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: Text(
+                            event.courtName,
+                            style: GoogleFonts.lexend(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                              color: const Color(0xFF1B1C19),
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                           ),
                         ),
                       ],
                     ),
                     const SizedBox(height: 6),
+
+                    // Ngày & Giờ
+                    Row(
+                      children: [
+                        Icon(Icons.calendar_today_rounded, size: 14, color: Colors.grey.shade600),
+                        const SizedBox(width: 5),
+                        Text(
+                          _formatDate(event.eventDate),
+                          style: GoogleFonts.lexend(
+                            fontSize: 12,
+                            color: Colors.grey.shade700,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Icon(Icons.access_time_filled_rounded, size: 14, color: Colors.grey.shade600),
+                        const SizedBox(width: 5),
+                        Text(
+                          "${_cleanTime(event.startTime)} - ${_cleanTime(event.endTime)}",
+                          style: GoogleFonts.lexend(
+                            fontSize: 12,
+                            color: Colors.grey.shade700,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+
+                    // Thanh tiến độ vé đã bán
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              isFull
+                                  ? "Đã kín chỗ"
+                                  : "Còn lại $maxAvailable / ${event.maxTickets} vé (Tối thiểu ${event.minTickets} vé)",
+                              style: GoogleFonts.lexend(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                                color: isFull ? const Color(0xFFD32F2F) : const Color(0xFF006D38),
+                              ),
+                            ),
+                            Text(
+                              "${(progress * 100).toInt()}%",
+                              style: GoogleFonts.lexend(
+                                fontSize: 11,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.grey.shade600,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 4),
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(4),
+                          child: LinearProgressIndicator(
+                            value: progress,
+                            minHeight: 5,
+                            backgroundColor: Colors.grey.shade200,
+                            valueColor: AlwaysStoppedAnimation<Color>(
+                              isFull ? const Color(0xFFD32F2F) : const Color(0xFF006D38),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+
+                    const Divider(height: 20, thickness: 0.8),
+
+                    // Giá vé & Nút Chi tiết
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Text(
-                          _formatVND(event.ticketPrice),
-                          style: const TextStyle(
-                            color: Color(0xFFE67E22),
-                            fontWeight: FontWeight.bold,
-                            fontSize: 14,
-                          ),
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              "Giá vé tham gia",
+                              style: GoogleFonts.lexend(fontSize: 10, color: Colors.grey.shade500),
+                            ),
+                            Text(
+                              _formatVND(event.ticketPrice),
+                              style: GoogleFonts.lexend(
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                                color: event.ticketPrice == 0 ? const Color(0xFF2E7D32) : const Color(0xFFE65100),
+                              ),
+                            ),
+                          ],
                         ),
-                        const Icon(
-                          Icons.arrow_forward_ios_rounded,
-                          size: 12,
-                          color: Colors.grey,
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF006D38),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                "Chi tiết",
+                                style: GoogleFonts.lexend(
+                                  color: Colors.white,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              const SizedBox(width: 4),
+                              const Icon(Icons.arrow_forward_ios_rounded, color: Colors.white, size: 11),
+                            ],
+                          ),
                         ),
                       ],
                     ),
@@ -698,6 +790,117 @@ class _DiscoverPageState extends State<DiscoverPage> {
               ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+
+  // Banner mặc định với màu gradient & icon môn thể thao khi không có bannerUrl
+  Widget _buildSportDefaultBanner(String sportType) {
+    Color startColor = const Color(0xFF1B5E20);
+    Color endColor = const Color(0xFF004D40);
+
+    final sportLower = sportType.toLowerCase();
+    if (sportLower.contains('pickleball')) {
+      startColor = const Color(0xFF0277BD);
+      endColor = const Color(0xFF004D40);
+    } else if (sportLower.contains('cầu lông')) {
+      startColor = const Color(0xFFE65100);
+      endColor = const Color(0xFFBF360C);
+    } else if (sportLower.contains('bóng đá')) {
+      startColor = const Color(0xFF2E7D32);
+      endColor = const Color(0xFF1B5E20);
+    } else if (sportLower.contains('tennis')) {
+      startColor = const Color(0xFF6A1B9A);
+      endColor = const Color(0xFF4A148C);
+    } else if (sportLower.contains('bóng rổ')) {
+      startColor = const Color(0xFFEF6C00);
+      endColor = const Color(0xFFD84315);
+    }
+
+    return Container(
+      height: 100,
+      width: double.infinity,
+      decoration: BoxDecoration(
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+        gradient: LinearGradient(
+          colors: [startColor, endColor],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+      ),
+      child: Center(
+        child: Icon(
+          Icons.sports_rounded,
+          size: 48,
+          color: Colors.white.withValues(alpha: 0.2),
+        ),
+      ),
+    );
+  }
+
+  // Trạng thái trống khi không tìm thấy sự kiện nào
+  Widget _buildEmptyState() {
+    return Center(
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              width: 80,
+              height: 80,
+              decoration: BoxDecoration(
+                color: const Color(0xFF006D38).withValues(alpha: 0.1),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                Icons.event_busy_rounded,
+                size: 40,
+                color: Color(0xFF006D38),
+              ),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              "Không tìm thấy sự kiện nào!",
+              style: GoogleFonts.lexend(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                color: const Color(0xFF1B1C19),
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              "Hiện tại chưa có sự kiện hoặc giải đấu nào phù hợp với bộ lọc đã chọn.",
+              textAlign: TextAlign.center,
+              style: GoogleFonts.lexend(
+                fontSize: 13,
+                color: Colors.grey.shade600,
+              ),
+            ),
+            const SizedBox(height: 20),
+            ElevatedButton.icon(
+              onPressed: () {
+                setState(() {
+                  _selectedSport = 'Tất cả';
+                  _selectedLevel = 'Tất cả';
+                  _searchController.clear();
+                  _searchQuery = '';
+                });
+              },
+              icon: const Icon(Icons.refresh_rounded, size: 18),
+              label: Text(
+                "Đặt lại bộ lọc",
+                style: GoogleFonts.lexend(fontWeight: FontWeight.bold),
+              ),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF006D38),
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+              ),
+            ),
+          ],
         ),
       ),
     );

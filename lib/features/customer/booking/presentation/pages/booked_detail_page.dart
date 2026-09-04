@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:flexisport_app/features/customer/booking/presentation/widgets/booking_cancel_bottom_sheet.dart';
 
 class BookedDetailPage extends StatefulWidget {
   final Map<String, dynamic>? booking;
@@ -132,6 +133,55 @@ class _BookedDetailPageState extends State<BookedDetailPage> {
       return DateTime(year, month, day, endHour, endMinute);
     }
     return null;
+  }
+
+  DateTime? _getBookingStartDateTime(List slots, String openTime, String closeTime) {
+    if (slots.isEmpty) return null;
+    
+    final String dateStr = slots.first['booking_date']?.toString() ?? '';
+    if (dateStr.isEmpty) return null;
+    
+    final dateParts = dateStr.split('-');
+    if (dateParts.length != 3) return null;
+    final year = int.tryParse(dateParts[0]) ?? 0;
+    final month = int.tryParse(dateParts[1]) ?? 0;
+    final day = int.tryParse(dateParts[2]) ?? 0;
+    
+    final open = _parseTime(openTime);
+    final close = _parseTime(closeTime);
+    int startMinutes = open.hour * 60 + open.minute;
+    int endMinutes = close.hour * 60 + close.minute;
+    if (endMinutes <= startMinutes) {
+      startMinutes = 6 * 60;
+      endMinutes = 22 * 60;
+    }
+    
+    final List<int> startMinutesList = [];
+    int current = startMinutes;
+    while (current < endMinutes) {
+      startMinutesList.add(current);
+      current += 30;
+    }
+    
+    final List<int> indices = slots.map((s) => s['slot_index'] as int? ?? 0).toList();
+    if (indices.isEmpty) return null;
+    indices.sort();
+    final minIdx = indices.first;
+    
+    if (minIdx < startMinutesList.length) {
+      final startMin = startMinutesList[minIdx];
+      final startHour = startMin ~/ 60;
+      final startMinute = startMin % 60;
+      
+      return DateTime(year, month, day, startHour, startMinute);
+    }
+    return null;
+  }
+
+  bool _isBookingStarted(List slots, String openTime, String closeTime) {
+    final startDateTime = _getBookingStartDateTime(slots, openTime, closeTime);
+    if (startDateTime == null) return false;
+    return DateTime.now().isAfter(startDateTime);
   }
 
   bool _isBookingPassed(List slots, String openTime, String closeTime) {
@@ -309,21 +359,24 @@ class _BookedDetailPageState extends State<BookedDetailPage> {
     String statusText = 'Chờ chủ sân xác nhận';
     Color statusTextColor = const Color(0xFFE2A62C); // màu vàng như hình
 
-    if (hasPassed) {
-      statusText = 'Thành công';
-      statusTextColor = const Color(0xFF1EC391);
-    } else if (status == 'completed') {
-      statusText = 'Đã xác nhận';
-      statusTextColor = const Color(0xFF1EC391);
-    } else if (status == 'cancelled') {
+    if (status == 'cancelled') {
       statusText = 'Đã huỷ';
       statusTextColor = Colors.redAccent;
+    } else if (hasPassed) {
+      statusText = 'Thành công';
+      statusTextColor = const Color(0xFF1EC391);
+    } else if (status == 'completed' || status == 'confirmed') {
+      statusText = 'Đã xác nhận';
+      statusTextColor = const Color(0xFF1EC391);
     }
 
     // Trạng thái thanh toán
     String paymentStatusText = 'Chưa thanh toán';
     Color paymentStatusColor = const Color(0xFFE2A62C); // màu vàng như hình
-    if (hasPassed || status == 'completed') {
+    if (status == 'cancelled') {
+      paymentStatusText = 'Đã hoàn tiền (Refunded)';
+      paymentStatusColor = Colors.orangeAccent;
+    } else if (hasPassed || status == 'completed' || status == 'confirmed') {
       paymentStatusText = 'Đã thanh toán';
       paymentStatusColor = const Color(0xFF1EC391);
     }
@@ -515,8 +568,8 @@ class _BookedDetailPageState extends State<BookedDetailPage> {
                               style: const TextStyle(color: Colors.white70, fontSize: 16),
                               children: [
                                 TextSpan(
-                                  text: (widget.booking?['note']?.toString() ?? '').isNotEmpty
-                                      ? (widget.booking?['note']?.toString() ?? '')
+                                  text: (widget.booking?['note']?.toString() ?? widget.booking?['notes']?.toString() ?? '').isNotEmpty
+                                      ? (widget.booking?['note']?.toString() ?? widget.booking?['notes']?.toString() ?? '')
                                       : "Không có",
                                   style: const TextStyle(
                                     fontStyle: FontStyle.italic,
@@ -547,6 +600,78 @@ class _BookedDetailPageState extends State<BookedDetailPage> {
                         ],
                       ),
                     ),
+
+                    if (status == 'cancelled') ...[
+                      const SizedBox(height: 16),
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: Colors.red.shade900.withValues(alpha: 0.4),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: Colors.redAccent.withValues(alpha: 0.5)),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Row(
+                              children: [
+                                Icon(Icons.cancel_outlined, color: Colors.redAccent, size: 20),
+                                SizedBox(width: 8),
+                                Text(
+                                  "Đơn đặt sân đã bị hủy",
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 15,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            if ((widget.booking?['cancellation_reason']?.toString() ?? '').isNotEmpty) ...[
+                              const SizedBox(height: 8),
+                              Text(
+                                "Lý do hủy: ${widget.booking!['cancellation_reason']}",
+                                style: const TextStyle(color: Colors.white70, fontSize: 13),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                    ],
+
+                    if ((status == 'pending' || status == 'completed' || status == 'confirmed') &&
+                        !_isBookingStarted(slots, openTime, closeTime) &&
+                        !hasPassed) ...[
+                      const SizedBox(height: 24),
+                      SizedBox(
+                        width: double.infinity,
+                        child: OutlinedButton.icon(
+                          onPressed: () {
+                            BookingCancelBottomSheet.show(
+                              context,
+                              booking: widget.booking!,
+                              onSuccess: () => context.pop(),
+                            );
+                          },
+                          icon: const Icon(Icons.cancel_outlined, color: Colors.redAccent),
+                          label: const Text(
+                            "Hủy đặt sân",
+                            style: TextStyle(
+                              color: Colors.redAccent,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 16,
+                            ),
+                          ),
+                          style: OutlinedButton.styleFrom(
+                            side: const BorderSide(color: Colors.redAccent, width: 1.5),
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                    ],
                   ],
                 ),
               ),
@@ -610,7 +735,7 @@ class _BookedDetailPageState extends State<BookedDetailPage> {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 10.0),
       child: Divider(
-        color: Colors.white.withOpacity(0.1),
+        color: Colors.white.withValues(alpha: 0.1),
         height: 1,
       ),
     );

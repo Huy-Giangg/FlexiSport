@@ -94,16 +94,55 @@ class SportsComplexProvider extends ChangeNotifier {
   bool _stadiumMatchesSport(SportsComplexEntity stadium, String sport) {
     final name = stadium.name.toLowerCase();
     final lowercaseSport = sport.toLowerCase();
-    
+    final sportsType = stadium.sportsType?.toLowerCase() ?? '';
+
+    // 1. So khớp trực tiếp theo sportsType của cơ sở
+    if (sportsType.isNotEmpty) {
+      if (sportsType == lowercaseSport ||
+          sportsType.contains(lowercaseSport) ||
+          lowercaseSport.contains(sportsType)) {
+        return true;
+      }
+      if ((lowercaseSport == 'cầu lông' || lowercaseSport == 'badminton') &&
+          (sportsType.contains('badminton') || sportsType.contains('cầu lông'))) {
+        return true;
+      }
+      if ((lowercaseSport == 'bóng đá' || lowercaseSport == 'football' || lowercaseSport == 'soccer') &&
+          (sportsType.contains('football') || sportsType.contains('soccer') || sportsType.contains('bóng đá') || sportsType.contains('sân cỏ'))) {
+        return true;
+      }
+      if ((lowercaseSport.contains('chuyền') || lowercaseSport.contains('b.chuyền') || lowercaseSport.contains('volleyball')) &&
+          (sportsType.contains('chuyền') || sportsType.contains('volleyball'))) {
+        return true;
+      }
+      if ((lowercaseSport == 'bóng rổ' || lowercaseSport == 'basketball') &&
+          (sportsType.contains('basketball') || sportsType.contains('bóng rổ'))) {
+        return true;
+      }
+      if ((lowercaseSport == 'tennis' || lowercaseSport.contains('quần vợt')) &&
+          (sportsType.contains('quần vợt') || sportsType.contains('tennis'))) {
+        return true;
+      }
+      if (lowercaseSport == 'pickleball' && sportsType.contains('pickleball')) {
+        return true;
+      }
+      if (lowercaseSport == 'golf' && sportsType.contains('golf')) {
+        return true;
+      }
+    }
+
+    // 2. So khớp theo tên sân (fallback nếu cơ sở chưa có nhãn sportsType)
     if (name.contains(lowercaseSport)) return true;
-    
-    // Custom mappings for English terms or alternate names
+
+    // Custom mappings cho tên sân tiếng Anh / từ đồng nghĩa
     if (lowercaseSport == 'cầu lông' && name.contains('badminton')) return true;
-    if (lowercaseSport == 'bóng đá' && (name.contains('football') || name.contains('soccer') || name.contains('sân cỏ'))) return true;
-    if (lowercaseSport.contains('chuyền') && (name.contains('chuyền') || name.contains('volleyball'))) return true;
-    if (lowercaseSport == 'bóng rổ' && name.contains('basketball')) return true;
-    if (lowercaseSport == 'tennis' && name.contains('quần vợt')) return true;
-    
+    if (lowercaseSport == 'bóng đá' && (name.contains('football') || name.contains('soccer') || name.contains('sân cỏ') || name.contains('bóng đá'))) return true;
+    if ((lowercaseSport.contains('chuyền') || lowercaseSport.contains('b.chuyền')) && (name.contains('chuyền') || name.contains('volleyball'))) return true;
+    if (lowercaseSport == 'bóng rổ' && (name.contains('basketball') || name.contains('bóng rổ'))) return true;
+    if ((lowercaseSport == 'tennis' || lowercaseSport.contains('quần vợt')) && (name.contains('quần vợt') || name.contains('tennis'))) return true;
+    if (lowercaseSport == 'pickleball' && name.contains('pickleball')) return true;
+    if (lowercaseSport == 'golf' && name.contains('golf')) return true;
+
     return false;
   }
 
@@ -123,7 +162,8 @@ class SportsComplexProvider extends ChangeNotifier {
       list = list.where((stadium) {
         final matchesName = stadium.name.toLowerCase().contains(lowercaseQuery);
         final matchesAddress = stadium.address.toLowerCase().contains(lowercaseQuery);
-        return matchesName || matchesAddress;
+        final matchesSport = stadium.sportsType?.toLowerCase().contains(lowercaseQuery) ?? false;
+        return matchesName || matchesAddress || matchesSport;
       }).toList();
     }
 
@@ -175,6 +215,9 @@ class SportsComplexProvider extends ChangeNotifier {
               'rating': item.rating,
               'open_time': item.open_time,
               'close_time': item.close_time,
+              'latitude': item.latitude,
+              'longitude': item.longitude,
+              'sports_type': item.sportsType,
             };
           }
         }).toList(),

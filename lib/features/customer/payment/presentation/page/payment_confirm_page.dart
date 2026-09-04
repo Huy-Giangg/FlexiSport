@@ -195,11 +195,46 @@ class _PaymentConfirmPageState extends State<PaymentConfirmPage> {
             
             debugPrint("Realtime payment status update received: $status");
 
-            if (status == 'completed') {
+            if (status == 'completed' || status == 'confirmed') {
               _realtimeSubscription?.cancel();
               _countdownTimer?.cancel();
               
-              // Trigger notification updates
+              // 1. Gửi thông báo thành công cho khách hàng
+              final slots = widget.args.infoArgs.selectedSlots;
+              final courtName = slots.isNotEmpty ? slots.first.courtName : 'Sân thể thao';
+              final timeRange = slots.isNotEmpty ? slots.first.timeRange : '';
+              final venueName = widget.args.infoArgs.venue.name;
+              final bookingDate = widget.args.infoArgs.date;
+
+              try {
+                NotificationService.instance.showBookingSuccessNotification(
+                  bookingId: bookingId,
+                  venueName: venueName,
+                  courtName: courtName,
+                  timeRange: timeRange,
+                  date: bookingDate,
+                );
+              } catch (e) {
+                debugPrint("Lỗi bắn thông báo đặt sân thành công: $e");
+              }
+
+              // 2. Gửi thông báo cho Chủ sân
+              try {
+                NotificationService.instance.notifyOwnerNewBooking(
+                  bookingId: bookingId,
+                  venueId: widget.args.infoArgs.venue.id,
+                  venueName: venueName,
+                  courtName: courtName,
+                  timeRange: timeRange,
+                  date: bookingDate,
+                  customerName: widget.args.name,
+                  totalAmount: widget.args.infoArgs.totalAmount,
+                );
+              } catch (e) {
+                debugPrint("Lỗi gửi thông báo cho chủ sân: $e");
+              }
+
+              // 3. Đồng bộ nhắc lịch thi đấu
               if (_userId != 'guest_user') {
                 try {
                   NotificationService.instance.syncMatchReminders(_userId);

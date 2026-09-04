@@ -451,42 +451,55 @@ class _NotificationIconWidgetState extends State<NotificationIconWidget> {
     if (user == null) return;
 
     try {
-      // 1. Lấy danh sách ID các kèo do user làm host
+      final prefs = await SharedPreferences.getInstance();
+      final lastSeenStr = prefs.getString('last_seen_notification_time');
+      final lastSeen = lastSeenStr != null ? DateTime.tryParse(lastSeenStr) : null;
+      int count = 0;
+
+      // 1. Đếm số yêu cầu ghép kèo
       final myPosts = await Supabase.instance.client
           .from('matchmaking_posts')
           .select('id')
           .eq('host_id', user.id);
       
       final postIds = (myPosts as List).map((p) => p['id'] as String).toList();
-      if (postIds.isEmpty) {
-        if (mounted) setState(() => _pendingCount = 0);
-        return;
+      if (postIds.isNotEmpty) {
+        final countResponse = await Supabase.instance.client
+            .from('matchmaking_requests')
+            .select('id, created_at')
+            .inFilter('post_id', postIds)
+            .eq('status', 'pending');
+        
+        final requests = countResponse as List? ?? [];
+        if (lastSeen == null) {
+          count += requests.length;
+        } else {
+          for (var req in requests) {
+            final createdAtStr = req['created_at'] as String?;
+            if (createdAtStr != null) {
+              final createdAt = DateTime.tryParse(createdAtStr);
+              if (createdAt != null && createdAt.isAfter(lastSeen)) {
+                count++;
+              }
+            }
+          }
+        }
       }
 
-      // 2. Đếm số yêu cầu ghép kèo đang ở trạng thái 'pending'
-      final countResponse = await Supabase.instance.client
-          .from('matchmaking_requests')
+      // 2. Đếm các đơn đặt sân mới thành công chưa xem
+      final bookingsResponse = await Supabase.instance.client
+          .from('bookings')
           .select('id, created_at')
-          .inFilter('post_id', postIds)
-          .eq('status', 'pending');
+          .eq('user_id', user.id)
+          .inFilter('status', ['completed', 'confirmed']);
       
-      final requests = countResponse as List? ?? [];
-      
-      // Lấy thời điểm xem thông báo cuối cùng từ SharedPreferences
-      final prefs = await SharedPreferences.getInstance();
-      final lastSeenStr = prefs.getString('last_seen_notification_time');
-      
-      int count = 0;
-      if (lastSeenStr == null) {
-        // Nếu chưa xem lần nào, đếm toàn bộ các yêu cầu đang pending
-        count = requests.length;
-      } else {
-        final lastSeen = DateTime.parse(lastSeenStr);
-        for (var req in requests) {
-          final createdAtStr = req['created_at'] as String?;
+      final bookings = bookingsResponse as List? ?? [];
+      if (lastSeen != null) {
+        for (var b in bookings) {
+          final createdAtStr = b['created_at'] as String?;
           if (createdAtStr != null) {
-            final createdAt = DateTime.parse(createdAtStr);
-            if (createdAt.isAfter(lastSeen)) {
+            final createdAt = DateTime.tryParse(createdAtStr);
+            if (createdAt != null && createdAt.isAfter(lastSeen)) {
               count++;
             }
           }
@@ -508,11 +521,19 @@ class _NotificationIconWidgetState extends State<NotificationIconWidget> {
     if (user == null) return;
 
     _subscription = Supabase.instance.client
-        .channel('public:matchmaking_requests_count')
+        .channel('public:home_notifications_count')
         .onPostgresChanges(
           event: PostgresChangeEvent.all,
           schema: 'public',
           table: 'matchmaking_requests',
+          callback: (payload) {
+            _fetchPendingCount();
+          },
+        )
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'bookings',
           callback: (payload) {
             _fetchPendingCount();
           },

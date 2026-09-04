@@ -1,13 +1,15 @@
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
+import 'package:flexisport_app/core/theme/app_colors.dart';
 import 'package:flexisport_app/features/customer/home/presentation/providers/main_page_provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:flexisport_app/features/customer/booking/domain/entities/event_booking_entity.dart';
 import 'package:flexisport_app/features/customer/booking/presentation/providers/booking_provider.dart';
-import 'package:flexisport_app/features/customer/matchmaking/domain/entities/matchmaking_post.dart';
+import 'package:flexisport_app/features/customer/booking/presentation/widgets/booking_cancel_bottom_sheet.dart';
 import 'package:flexisport_app/features/customer/matchmaking/data/models/matchmaking_post_model.dart';
 import 'package:flexisport_app/features/customer/sports_complex/presentation/providers/sports_complex_provider.dart';
 
@@ -423,69 +425,6 @@ class _BookedCourtPageState extends State<BookedCourtPage> {
     } catch (_) {
       return '';
     }
-  }
-
-  Future<void> _cancelBooking(dynamic booking) async {
-    final bookingId = booking['id'];
-    try {
-      // 1. Xóa các slot giờ tương ứng để giải phóng sân con
-      await Supabase.instance.client
-          .from('booking_slots')
-          .delete()
-          .eq('booking_id', bookingId);
-
-      // 2. Cập nhật trạng thái đơn đặt thành đã hủy
-      await Supabase.instance.client
-          .from('bookings')
-          .update({'status': 'cancelled'})
-          .eq('id', bookingId);
-
-      _loadBookings();
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text("Huỷ lịch đặt thành công!"),
-            backgroundColor: Color(0xFF006D38),
-          ),
-        );
-      }
-    } catch (e) {
-      debugPrint("Lỗi huỷ lịch: $e");
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text("Lỗi khi huỷ lịch: $e"),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    }
-  }
-
-  void _showCancelConfirmationDialog(BuildContext context, dynamic booking) {
-    showDialog(
-      context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          title: const Text("Xác nhận huỷ"),
-          content: const Text("Bạn có chắc chắn muốn huỷ lịch đặt này không?"),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text("Không", style: TextStyle(color: Colors.grey)),
-            ),
-            TextButton(
-              onPressed: () {
-                Navigator.of(context).pop();
-                _cancelBooking(booking);
-              },
-              child: const Text("Huỷ lịch", style: TextStyle(color: Colors.red)),
-            ),
-          ],
-        );
-      },
-    );
   }
 
   void _showRatingDialog(BuildContext context, String bookingId, String venueId) {
@@ -1146,8 +1085,20 @@ class _BookedCourtPageState extends State<BookedCourtPage> {
 
   PreferredSizeWidget _buildAppBar() {
     return AppBar(
-      backgroundColor: const Color(0xFF006D38),
       elevation: 0,
+      scrolledUnderElevation: 0,
+      flexibleSpace: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            colors: [
+              AppColors.primaryContainer,
+              AppColors.primary,
+            ],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+        ),
+      ),
       leading: IconButton(
         onPressed: () {
           if (widget.from == 'payment_success') {
@@ -1160,21 +1111,58 @@ class _BookedCourtPageState extends State<BookedCourtPage> {
         icon: const Icon(
           Icons.arrow_back_ios_new_rounded,
           color: Colors.white,
+          size: 20,
         ),
       ),
-      title: const Text(
+      title: Text(
         "Danh sách đặt lịch",
-        style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
+        style: GoogleFonts.lexend(
+          color: Colors.white,
+          fontSize: 18,
+          fontWeight: FontWeight.bold,
+        ),
       ),
       centerTitle: true,
-      bottom: const TabBar(
-        labelColor: Colors.white,
-        unselectedLabelColor: Colors.white70,
-        indicatorColor: Colors.white,
-        tabs: [
-          Tab(text: "LỊCH ĐẶT SÂN"),
-          Tab(text: "VÉ SỰ KIỆN"),
-        ],
+      bottom: PreferredSize(
+        preferredSize: const Size.fromHeight(56),
+        child: Container(
+          height: 44,
+          margin: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+          padding: const EdgeInsets.all(4),
+          decoration: BoxDecoration(
+            color: Colors.black.withValues(alpha: 0.15),
+            borderRadius: BorderRadius.circular(25),
+          ),
+          child: TabBar(
+            dividerColor: Colors.transparent,
+            indicatorSize: TabBarIndicatorSize.tab,
+            indicator: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(22),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.08),
+                  blurRadius: 6,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            labelColor: AppColors.primaryContainer,
+            unselectedLabelColor: Colors.white.withValues(alpha: 0.9),
+            labelStyle: GoogleFonts.lexend(
+              fontSize: 13,
+              fontWeight: FontWeight.bold,
+            ),
+            unselectedLabelStyle: GoogleFonts.lexend(
+              fontSize: 13,
+              fontWeight: FontWeight.w500,
+            ),
+            tabs: const [
+              Tab(text: "LỊCH ĐẶT SÂN"),
+              Tab(text: "VÉ SỰ KIỆN"),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -1220,22 +1208,22 @@ class _BookedCourtPageState extends State<BookedCourtPage> {
     Color statusTextColor = const Color(0xFFE26A2C);
     Color statusBgColor = const Color(0xFFFFF4EC);
 
-    if (hasPassed) {
-      statusText = 'Thành công';
-      statusTextColor = const Color(0xFF006D38);
-      statusBgColor = const Color(0xFFE8F5E9);
-    } else if (status == 'completed') {
-      statusText = 'Đã xác nhận';
-      statusTextColor = const Color(0xFF006D38);
-      statusBgColor = const Color(0xFFE8F5E9);
-    } else if (status == 'cancelled') {
+    if (status == 'cancelled') {
       statusText = 'Đã huỷ';
       statusTextColor = Colors.red;
       statusBgColor = const Color(0xFFFFEBEE);
+    } else if (hasPassed) {
+      statusText = 'Thành công';
+      statusTextColor = const Color(0xFF006D38);
+      statusBgColor = const Color(0xFFE8F5E9);
+    } else if (status == 'completed' || status == 'confirmed') {
+      statusText = 'Đã xác nhận';
+      statusTextColor = const Color(0xFF006D38);
+      statusBgColor = const Color(0xFFE8F5E9);
     }
 
     final bookingMap = Map<String, dynamic>.from(booking);
-    if (hasPassed) {
+    if (hasPassed && status != 'cancelled') {
       bookingMap['status'] = 'completed';
     }
 
@@ -1273,9 +1261,13 @@ class _BookedCourtPageState extends State<BookedCourtPage> {
         statusBgColor: statusBgColor,
         totalAmount: totalAmount,
         createdAtFormatted: _formatCreatedAt(createdAtStr),
-        isPending: status == 'pending' && !hasStarted,
+        canCancel: (status == 'pending' || status == 'completed' || status == 'confirmed') && !hasStarted && !hasPassed,
         onCancel: () {
-          _showCancelConfirmationDialog(context, booking);
+          BookingCancelBottomSheet.show(
+            context,
+            booking: bookingMap,
+            onSuccess: _loadBookings,
+          );
         },
         onTapDetails: () {
           context.push("/BookedDetailPage", extra: bookingMap);
@@ -1324,7 +1316,7 @@ class BookingCardWidget extends StatelessWidget {
   final Color statusBgColor;
   final double totalAmount;
   final String createdAtFormatted;
-  final bool isPending;
+  final bool canCancel;
   final VoidCallback onCancel;
   final VoidCallback onTapDetails;
   final VoidCallback? onOpenMatchmaking;
@@ -1343,7 +1335,7 @@ class BookingCardWidget extends StatelessWidget {
     required this.statusBgColor,
     required this.totalAmount,
     required this.createdAtFormatted,
-    required this.isPending,
+    required this.canCancel,
     required this.onCancel,
     required this.onTapDetails,
     this.onOpenMatchmaking,
@@ -1532,7 +1524,7 @@ class BookingCardWidget extends StatelessWidget {
               ),
               Row(
                 children: [
-                  if (isPending) ...[
+                  if (canCancel) ...[
                     OutlinedButton(
                       onPressed: onCancel,
                       style: OutlinedButton.styleFrom(

@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:flexisport_app/core/theme/app_colors.dart';
 import 'package:flexisport_app/features/auth/utils/validators.dart';
 
 class ProfileEditPage extends StatefulWidget {
@@ -185,7 +187,7 @@ class _ProfileEditPageState extends State<ProfileEditPage> {
     if (_isLoading) {
       return const Scaffold(
         body: Center(
-          child: CircularProgressIndicator(color: Color(0xFF006D38)),
+          child: CircularProgressIndicator(color: AppColors.primaryContainer),
         ),
       );
     }
@@ -193,8 +195,20 @@ class _ProfileEditPageState extends State<ProfileEditPage> {
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAF9),
       appBar: AppBar(
-        backgroundColor: const Color(0xFF006D38),
         elevation: 0,
+        scrolledUnderElevation: 0,
+        flexibleSpace: Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              colors: [
+                AppColors.primaryContainer,
+                AppColors.primary,
+              ],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+          ),
+        ),
         leading: IconButton(
           onPressed: () {
             context.pop();
@@ -202,11 +216,12 @@ class _ProfileEditPageState extends State<ProfileEditPage> {
           icon: const Icon(
             Icons.arrow_back_ios_new_rounded,
             color: Colors.white,
+            size: 20,
           ),
         ),
-        title: const Text(
+        title: Text(
           "Chỉnh sửa thông tin cá nhân",
-          style: TextStyle(
+          style: GoogleFonts.lexend(
             color: Colors.white,
             fontWeight: FontWeight.bold,
             fontSize: 18,
@@ -227,7 +242,7 @@ class _ProfileEditPageState extends State<ProfileEditPage> {
                     borderRadius: BorderRadius.circular(16),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withOpacity(0.03),
+                        color: Colors.black.withValues(alpha: 0.03),
                         blurRadius: 10,
                         offset: const Offset(0, 4),
                       ),
@@ -477,7 +492,7 @@ class _ProfileEditPageState extends State<ProfileEditPage> {
                 color: Colors.white,
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.05),
+                    color: Colors.black.withValues(alpha: 0.05),
                     blurRadius: 4,
                     offset: const Offset(0, -2),
                   ),
@@ -519,7 +534,7 @@ class _ProfileEditPageState extends State<ProfileEditPage> {
                       style: ElevatedButton.styleFrom(
                         backgroundColor: _isSaving
                             ? Colors.grey.shade300
-                            : Colors.green, // Nền xám như ảnh mẫu
+                            : AppColors.primary, // Nền xám như ảnh mẫu
                         foregroundColor: Colors.white,
                         disabledBackgroundColor: Colors.grey.shade300,
                         padding: const EdgeInsets.symmetric(vertical: 14),

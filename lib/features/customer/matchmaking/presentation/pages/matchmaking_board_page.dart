@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:flexisport_app/core/theme/app_colors.dart';
+import 'package:flexisport_app/features/customer/home/presentation/widgets/header_widget.dart';
 import 'package:flexisport_app/features/customer/matchmaking/domain/entities/matchmaking_post.dart';
 import 'package:flexisport_app/features/customer/matchmaking/presentation/providers/matchmaking_provider.dart';
 import 'package:flexisport_app/features/customer/matchmaking/presentation/widgets/matchmaking_card.dart';
@@ -125,30 +128,77 @@ class _MatchmakingBoardPageState extends State<MatchmakingBoardPage> {
     return DefaultTabController(
       length: 2,
       child: Scaffold(
-        
+        backgroundColor: AppColors.background,
         appBar: AppBar(
-          title: const Text(
-            'Ghép kèo & Tìm đồng đội',
-            style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white),
+          elevation: 0,
+          scrolledUnderElevation: 0,
+          flexibleSpace: Container(
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                colors: [
+                  AppColors.primaryContainer,
+                  AppColors.primary,
+                ],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+            ),
           ),
-          backgroundColor: const Color(0xFF006D38),
+          title: Text(
+            'Ghép kèo & Tìm đồng đội',
+            style: GoogleFonts.lexend(
+              fontWeight: FontWeight.bold,
+              fontSize: 18,
+              color: Colors.white,
+            ),
+          ),
           centerTitle: true,
-          actions: [
-            IconButton(
-              icon: const Icon(Icons.notifications_none_outlined, color: Colors.white,),
-              onPressed: () {},
+          actions: const [
+            Padding(
+              padding: EdgeInsets.only(right: 6),
+              child: NotificationIconWidget(opacity: 1.0),
             ),
           ],
-          bottom: TabBar(
-            dividerColor: Colors.transparent,
-            padding: const EdgeInsets.all(4),
-            labelColor: Colors.white,
-            unselectedLabelColor: Colors.white70,
-            indicatorColor: Colors.white,
-            tabs: [
-              Tab(text: 'Kèo quanh đây'),
-              Tab(text: 'Kèo của tôi'),
-            ],
+          bottom: PreferredSize(
+            preferredSize: const Size.fromHeight(56),
+            child: Container(
+              height: 44,
+              margin: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+              padding: const EdgeInsets.all(4),
+              decoration: BoxDecoration(
+                color: Colors.black.withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(25),
+              ),
+              child: TabBar(
+                dividerColor: Colors.transparent,
+                indicatorSize: TabBarIndicatorSize.tab,
+                indicator: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(22),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.08),
+                      blurRadius: 6,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                ),
+                labelColor: AppColors.primaryContainer,
+                unselectedLabelColor: Colors.white.withValues(alpha: 0.9),
+                labelStyle: GoogleFonts.lexend(
+                  fontSize: 14,
+                  fontWeight: FontWeight.bold,
+                ),
+                unselectedLabelStyle: GoogleFonts.lexend(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                ),
+                tabs: const [
+                  Tab(text: 'Kèo quanh đây'),
+                  Tab(text: 'Kèo của tôi'),
+                ],
+              ),
+            ),
           ),
         ),
         body: TabBarView(
@@ -158,10 +208,10 @@ class _MatchmakingBoardPageState extends State<MatchmakingBoardPage> {
               children: [
                 // Sports selection chips
                 SizedBox(
-                  height: 50,
+                  height: 56,
                   child: ListView.builder(
                     scrollDirection: Axis.horizontal,
-                    padding: const EdgeInsets.only( left: 16, right: 16, top: 16),
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                     itemCount: _sports.length,
                     itemBuilder: (context, index) {
                       final sport = _sports[index];
@@ -169,16 +219,30 @@ class _MatchmakingBoardPageState extends State<MatchmakingBoardPage> {
                       return Padding(
                         padding: const EdgeInsets.only(right: 8.0),
                         child: FilterChip(
-                          label: Text(sport),
+                          label: Text(
+                            sport,
+                            style: GoogleFonts.lexend(
+                              fontSize: 13,
+                              fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                              color: isSelected ? AppColors.primaryContainer : AppColors.onBackground,
+                            ),
+                          ),
                           selected: isSelected,
                           onSelected: (selected) {
                             setState(() {
                               _selectedSport = sport;
                             });
                           },
-                          
-                          selectedColor: Colors.green.shade100,
-                          checkmarkColor: Colors.green.shade700,
+                          backgroundColor: Colors.white,
+                          selectedColor: AppColors.primaryLightBg,
+                          side: BorderSide(
+                            color: isSelected ? AppColors.primaryContainer : Colors.grey.shade300,
+                            width: isSelected ? 1.5 : 1,
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          showCheckmark: false,
                         ),
                       );
                     },
@@ -195,7 +259,6 @@ class _MatchmakingBoardPageState extends State<MatchmakingBoardPage> {
             _buildPostList(context, currentUserId, isMine: true),
           ],
         ),
-        
       ),
     );
   }

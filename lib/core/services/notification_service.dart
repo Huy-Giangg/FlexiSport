@@ -366,6 +366,135 @@ class NotificationService {
     debugPrint('Đã đăng ký lắng nghe realtime matchmaking_requests cho user: $userId');
   }
 
+  Future<void> showBookingSuccessNotification({
+    required String bookingId,
+    required String venueName,
+    required String courtName,
+    required String timeRange,
+    required String date,
+  }) async {
+    final notificationId = bookingId.hashCode & 0x7FFFFFFF;
+    final title = 'Đặt sân thành công! 🎉';
+    final body = 'Bạn đã đặt sân $courtName ($timeRange ngày $date) tại $venueName thành công. Chúc bạn có buổi thi đấu vui vẻ!';
+    
+    await showNotification(
+      id: notificationId,
+      title: title,
+      body: body,
+      payload: jsonEncode({'route': '/BookedCourtPage'}),
+    );
+  }
+
+  Future<void> notifyOwnerNewBooking({
+    required String bookingId,
+    required String venueId,
+    required String venueName,
+    required String courtName,
+    required String timeRange,
+    required String date,
+    required String customerName,
+    required double totalAmount,
+  }) async {
+    try {
+      final supabase = Supabase.instance.client;
+      // 1. Tìm owner_id của cơ sở
+      final venueResp = await supabase
+          .from('venues')
+          .select('owner_id, user_id')
+          .eq('id', venueId)
+          .maybeSingle();
+
+      final ownerId = venueResp?['owner_id'] ?? venueResp?['user_id'];
+      if (ownerId != null) {
+        final formattedPrice = '${totalAmount.toInt().toString().replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (m) => '${m[1]}.')} đ';
+        
+        await supabase.from('notifications').insert({
+          'user_id': ownerId,
+          'title': 'Có đơn đặt sân mới! 🏸',
+          'body': 'Khách $customerName vừa đặt $courtName ($timeRange ngày $date) tại $venueName. Tổng tiền: $formattedPrice.',
+          'type': 'new_booking',
+          'created_at': DateTime.now().toIso8601String(),
+        });
+      }
+    } catch (e) {
+      debugPrint('Lỗi gửi thông báo cho chủ sân: $e');
+    }
+  }
+
+  Future<void> showBookingCancelledNotification({
+    required String bookingId,
+    required String venueName,
+    required String reason,
+    bool isCancelledByHost = false,
+  }) async {
+    final notificationId = bookingId.hashCode & 0x7FFFFFFF;
+    final title = isCancelledByHost
+        ? 'Lịch đặt sân đã bị hủy bởi cơ sở ❌'
+        : 'Hủy lịch đặt sân thành công ⚠️';
+    final body = isCancelledByHost
+        ? 'Cơ sở $venueName đã hủy đơn đặt sân của bạn. Lý do: $reason. Hệ thống sẽ hoàn trả 100% số tiền đã thanh toán cho bạn.'
+        : 'Bạn đã hủy thành công lịch đặt sân tại $venueName.';
+    
+    await showNotification(
+      id: notificationId,
+      title: title,
+      body: body,
+      payload: jsonEncode({'route': '/BookedCourtPage'}),
+    );
+  }
+
+  RealtimeChannel? _ownerRealtimeChannel;
+
+  // Đăng ký realtime nhận thông báo cho Chủ sân
+  void subscribeToOwnerNotifications(String ownerId) {
+    if (_ownerRealtimeChannel != null) {
+      unsubscribeFromOwnerNotifications();
+    }
+
+    final supabase = Supabase.instance.client;
+    
+    _ownerRealtimeChannel = supabase
+        .channel('public:owner_notifications_$ownerId')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.insert,
+          schema: 'public',
+          table: 'notifications',
+          filter: PostgresChangeFilter(
+            type: PostgresChangeFilterType.eq,
+            column: 'user_id',
+            value: ownerId,
+          ),
+          callback: (payload) async {
+            try {
+              final newRecord = payload.newRecord;
+              final title = newRecord['title'] as String? ?? 'Có đơn đặt sân mới! 🏸';
+              final body = newRecord['body'] as String? ?? 'Khách vừa đặt sân tại cơ sở của bạn. Hãy nhấn để xem ngay!';
+              final notificationId = newRecord['id'].toString().hashCode & 0x7FFFFFFF;
+
+              await showNotification(
+                id: notificationId,
+                title: title,
+                body: body,
+                payload: jsonEncode({'route': '/owner/bookings'}),
+              );
+            } catch (e) {
+              debugPrint('Lỗi xử lý sự kiện realtime owner notification: $e');
+            }
+          },
+        );
+
+    _ownerRealtimeChannel!.subscribe();
+    debugPrint('Đã đăng ký lắng nghe realtime notifications cho chủ sân: $ownerId');
+  }
+
+  void unsubscribeFromOwnerNotifications() {
+    if (_ownerRealtimeChannel != null) {
+      Supabase.instance.client.removeChannel(_ownerRealtimeChannel!);
+      _ownerRealtimeChannel = null;
+      debugPrint('Đã hủy đăng ký lắng nghe realtime owner notifications.');
+    }
+  }
+
   void unsubscribeFromMatchmakingRequests() {
     if (_realtimeChannel != null) {
       Supabase.instance.client.removeChannel(_realtimeChannel!);

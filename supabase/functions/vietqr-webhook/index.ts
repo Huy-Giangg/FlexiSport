@@ -151,7 +151,11 @@ serve(async (req) => {
     // Update booking status to completed (lowercase, expected by the app)
     const { error: updateBookingError } = await client
       .from('bookings')
-      .update({ status: 'completed' })
+      .update({ 
+        status: 'completed',
+        booking_status: 'confirmed',
+        payment_status: 'paid'
+      })
       .eq('id', bookingId)
 
     if (updateBookingError) {
