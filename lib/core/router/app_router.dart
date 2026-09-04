@@ -35,6 +35,7 @@ import 'package:flexisport_app/features/customer/booking/domain/entities/event_e
 import 'package:flexisport_app/features/customer/payment/presentation/page/event_payment_info_page.dart';
 import 'package:flexisport_app/features/customer/payment/presentation/page/event_payment_confirm_page.dart';
 import 'package:flexisport_app/features/customer/discover/presentation/pages/discover_page.dart';
+import 'package:flexisport_app/features/customer/ai_chat/presentation/pages/ai_chat_page.dart';
 import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter/material.dart';
@@ -363,6 +364,11 @@ class AppRouter {
             builder: (context, state) => const OwnerProfileDetailPage(),
           ),
         ],
+      ),
+      GoRoute(
+        path: '/ai-chat',
+        name: 'ai_chat',
+        builder: (context, state) => const AiChatPage(),
       ),
     ],
   );

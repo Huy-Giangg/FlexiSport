@@ -5,6 +5,7 @@ import 'package:flexisport_app/features/customer/home/presentation/widgets/ic_sp
 import 'package:flexisport_app/features/customer/sports_complex/presentation/providers/sports_complex_provider.dart';
 import 'package:flexisport_app/features/customer/sports_complex/presentation/widgets/sport_field_card.dart';
 import 'package:flexisport_app/features/customer/sports_complex/presentation/widgets/stadium_shimmer.dart';
+import 'package:flexisport_app/features/customer/ai_chat/presentation/widgets/ai_chat_fab.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -296,6 +297,7 @@ class _HomeState extends State<Home> {
           ],
         ),
       ),
+      floatingActionButton: const AiChatFab(),
     );
   }
 }

@@ -56,6 +56,9 @@ import 'package:flexisport_app/features/owner/booking_management/presentation/pr
 import 'package:flexisport_app/features/owner/court_management/presentation/providers/owner_court_provider.dart';
 import 'package:flexisport_app/features/owner/event_management/data/datasources/owner_event_remote_datasource.dart';
 import 'package:flexisport_app/features/owner/event_management/presentation/providers/owner_event_provider.dart';
+import 'package:flexisport_app/features/customer/ai_chat/data/datasources/ai_chat_remote_datasource.dart';
+import 'package:flexisport_app/features/customer/ai_chat/data/repositories/ai_chat_repository_impl.dart';
+import 'package:flexisport_app/features/customer/ai_chat/presentation/providers/ai_chat_provider.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -129,9 +132,16 @@ void main() async {
   // Owner Event Management dependencies
   final ownerEventRemoteDataSource = OwnerEventRemoteDataSource(Supabase.instance.client);
 
+  // AI Chat dependencies
+  final aiChatDataSource = AiChatRemoteDatasource();
+  final aiChatRepository = AiChatRepositoryImpl(aiChatDataSource);
+
   runApp(
     MultiProvider(
       providers: [
+        ChangeNotifierProvider(
+          create: (_) => AiChatProvider(repository: aiChatRepository),
+        ),
         ChangeNotifierProvider(
           create: (_) => SportsComplexProvider(
             useCase,
