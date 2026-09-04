@@ -163,7 +163,7 @@ class ChatBubble extends StatelessWidget {
                         ),
                       ),
                       SizedBox(
-                        height: 255,
+                        height: 275,
                         child: ListView.builder(
                           scrollDirection: Axis.horizontal,
                           physics: const BouncingScrollPhysics(),

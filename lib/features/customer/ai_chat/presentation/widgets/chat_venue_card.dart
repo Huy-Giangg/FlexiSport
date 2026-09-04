@@ -44,7 +44,7 @@ class ChatVenueCard extends StatelessWidget {
 
     return Container(
       width: 260,
-      margin: const EdgeInsets.only(right: 12, top: 8, bottom: 8),
+      margin: const EdgeInsets.only(right: 12, top: 4, bottom: 6),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
@@ -67,7 +67,7 @@ class ChatVenueCard extends StatelessWidget {
               ClipRRect(
                 borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
                 child: SizedBox(
-                  height: 110,
+                  height: 100,
                   width: double.infinity,
                   child: venue.logoUrl.isNotEmpty
                       ? Image.network(
@@ -131,7 +131,7 @@ class ChatVenueCard extends StatelessWidget {
 
           // Thông tin tóm tắt sân
           Padding(
-            padding: const EdgeInsets.all(10),
+            padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -187,7 +187,7 @@ class ChatVenueCard extends StatelessWidget {
                     ),
                   ],
                 ),
-                const SizedBox(height: 10),
+                const SizedBox(height: 8),
                 // 2 nút tác vụ: Xem chi tiết & Đặt sân ngay
                 Row(
                   children: [
