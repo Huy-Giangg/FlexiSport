@@ -14,4 +14,16 @@ class HoldSlotUsecase {
   }) {
     return repository.holdSlot(courtId, slotIndex, date, userId, lockToken: lockToken);
   }
+
+  Future<Map<String, dynamic>> verifyAndHoldSlotsBatch({
+    required List<Map<String, dynamic>> slots,
+    String? lockToken,
+    int durationMinutes = 10,
+  }) {
+    return repository.verifyAndHoldSlotsBatch(
+      slots,
+      lockToken: lockToken,
+      durationMinutes: durationMinutes,
+    );
+  }
 }

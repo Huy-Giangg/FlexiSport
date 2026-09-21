@@ -3,6 +3,7 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:flexisport_app/features/customer/payment/presentation/page/payment_confirm_page.dart';
+import 'package:flexisport_app/features/customer/booking/data/datasources/booking_remote_datasource.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 class SelectedSlotDetail {
@@ -51,6 +52,7 @@ class _PaymentInfoPageState extends State<PaymentInfoPage> {
   final _nameController = TextEditingController();
   final _phoneController = TextEditingController();
   final _noteController = TextEditingController();
+  bool _isSubmitting = false;
   late final TapGestureRecognizer _termsRecognizer;
   late final TapGestureRecognizer _refundRecognizer;
 
@@ -681,25 +683,111 @@ class _PaymentInfoPageState extends State<PaymentInfoPage> {
                     borderRadius: BorderRadius.circular(12),
                   ),
                   backgroundColor: const Color(0xFFE3B02C),
+                  disabledBackgroundColor: Colors.grey.shade400,
                 ),
-                onPressed: () {
-                  if (_formKey.currentState!.validate()) {
-                    // Xử lý thanh toán/đặt lịch ở đây
-                    context.push(
-                      "/PaymentConfirmPage",
-                      extra: PaymentConfirmArgs(
-                        infoArgs: widget.args,
-                        name: _nameController.text.trim(),
-                        phone: _phoneController.text.trim(),
-                        note: _noteController.text.trim(),
+                onPressed: _isSubmitting
+                    ? null
+                    : () async {
+                        if (_formKey.currentState!.validate()) {
+                          setState(() {
+                            _isSubmitting = true;
+                          });
+
+                          // Kiểm tra quyền giữ chỗ & gia hạn 10 phút trước khi sang màn thanh toán
+                          if (widget.args.rawSlots.isNotEmpty) {
+                            try {
+                              final bookingDatasource = BookingRemoteDatasource(Supabase.instance.client);
+                              final result = await bookingDatasource.verifyAndHoldSlotsBatch(
+                                slots: widget.args.rawSlots,
+                                lockToken: widget.args.lockToken,
+                                durationMinutes: 10,
+                              );
+
+                              if (!mounted) return;
+                              setState(() {
+                                _isSubmitting = false;
+                              });
+
+                              if (result['success'] != true) {
+                                if (!mounted) return;
+                                final msg = result['message']?.toString() ??
+                                    "Thời gian giữ chỗ của bạn đã hết hạn hoặc khung giờ này đã có người khác đặt.";
+                                showDialog(
+                                  context: context,
+                                  builder: (ctx) => AlertDialog(
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                                    title: Row(
+                                      children: const [
+                                        Icon(Icons.error_outline_rounded, color: Colors.redAccent, size: 28),
+                                        SizedBox(width: 8),
+                                        Expanded(
+                                          child: Text(
+                                            "Phiên giữ chỗ hết hạn",
+                                            style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    content: Text(
+                                      "$msg\n\nVui lòng quay lại màn hình chọn sân để chọn khung giờ khác.",
+                                      style: const TextStyle(fontSize: 14.5, height: 1.45),
+                                    ),
+                                    actions: [
+                                      ElevatedButton(
+                                        style: ElevatedButton.styleFrom(
+                                          backgroundColor: const Color(0xFF016B34),
+                                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                        ),
+                                        onPressed: () {
+                                          Navigator.of(ctx).pop();
+                                          if (mounted) {
+                                            context.pop(); // Quay lại màn hình chọn sân
+                                          }
+                                        },
+                                        child: const Text("QUAY LẠI CHỌN GIỜ", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                                      ),
+                                    ],
+                                  ),
+                                );
+                                return;
+                              }
+                            } catch (_) {
+                              if (mounted) {
+                                setState(() {
+                                  _isSubmitting = false;
+                                });
+                              }
+                            }
+                          } else {
+                            if (mounted) {
+                              setState(() {
+                                _isSubmitting = false;
+                              });
+                            }
+                          }
+
+                          if (!mounted) return;
+                          context.push(
+                            "/PaymentConfirmPage",
+                            extra: PaymentConfirmArgs(
+                              infoArgs: widget.args,
+                              name: _nameController.text.trim(),
+                              phone: _phoneController.text.trim(),
+                              note: _noteController.text.trim(),
+                            ),
+                          );
+                        }
+                      },
+                child: _isSubmitting
+                    ? const SizedBox(
+                        width: 22,
+                        height: 22,
+                        child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                      )
+                    : const Text(
+                        "XÁC NHẬN & THANH TOÁN",
+                        style: TextStyle(fontSize: 16, color: Colors.white, fontWeight: FontWeight.bold),
                       ),
-                    );
-                  }
-                },
-                child: const Text(
-                  "XÁC NHẬN & THANH TOÁN",
-                  style: TextStyle(fontSize: 16, color: Colors.white),
-                ),
               ),
             ),
           ],

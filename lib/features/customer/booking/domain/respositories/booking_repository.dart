@@ -17,6 +17,7 @@ abstract class BookingRepository {
   Future<void> releaseSlot(String courtId, int slotIndex, String date, String userId, {String? lockToken});
   Future<void> releaseAllUserLocks(String userId, {String? lockToken});
   Future<bool> extendLocks(List<Map<String, dynamic>> slots, {String? lockToken, int durationMinutes = 10});
+  Future<Map<String, dynamic>> verifyAndHoldSlotsBatch(List<Map<String, dynamic>> slots, {String? lockToken, int durationMinutes = 10});
   
   Future<List<EventEntity>> getEvents(String venueId);
   Future<int> getBookedTicketsCount(String eventId);

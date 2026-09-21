@@ -8,7 +8,6 @@ import 'package:flexisport_app/features/customer/payment/presentation/page/payme
 import 'package:flexisport_app/features/customer/payment/data/datasources/payment_remote_datasource.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:flexisport_app/core/services/session_service.dart';
 import 'package:flexisport_app/features/customer/booking/data/datasources/booking_remote_datasource.dart';
 
 class PaymentConfirmArgs {

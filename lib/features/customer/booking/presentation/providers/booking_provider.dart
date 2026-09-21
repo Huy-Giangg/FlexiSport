@@ -198,6 +198,24 @@ class BookingProvider extends ChangeNotifier {
     return success;
   }
 
+  /// Xác thực toàn bộ danh sách slot đã chọn trước khi chuyển sang bước điền thông tin
+  /// Gia hạn khóa an toàn lên 10 phút nếu tất cả đều hợp lệ
+  Future<Map<String, dynamic>> verifyAndHoldSelectedSlots({
+    required String venueId,
+    required String date,
+    required List<Map<String, dynamic>> slots,
+    String? lockToken,
+    int durationMinutes = 10,
+  }) async {
+    final result = await holdSlotUseCase.verifyAndHoldSlotsBatch(
+      slots: slots,
+      lockToken: lockToken,
+      durationMinutes: durationMinutes,
+    );
+    await loadActiveLocks(venueId, date);
+    return result;
+  }
+
   Future<void> releaseCourtSlot({
     required String venueId,
     required String courtId,

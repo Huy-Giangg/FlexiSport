@@ -105,7 +105,33 @@ class BookingRemoteDatasource {
     try {
       final authUser = supabaseClient.auth.currentUser;
       final actualUserId = authUser?.id;
+      final token = (lockToken != null && lockToken.isNotEmpty)
+          ? lockToken
+          : (actualUserId == null ? await SessionService.instance.getGuestSessionToken() : null);
 
+      // 1. Ưu tiên gọi Stored Procedure nguyên tử acquire_court_lock
+      try {
+        final res = await supabaseClient.rpc('acquire_court_lock', params: {
+          'p_court_id': courtId,
+          'p_slot_index': slotIndex,
+          'p_booking_date': date,
+          'p_user_id': actualUserId,
+          'p_lock_token': token,
+          'p_duration_minutes': 5,
+        });
+
+        if (res is Map) {
+          final isSuccess = res['success'] == true;
+          if (!isSuccess) {
+            debugPrint("acquire_court_lock từ chối slot $slotIndex: ${res['message']}");
+          }
+          return isSuccess;
+        }
+      } catch (rpcErr) {
+        debugPrint("RPC acquire_court_lock fallback: $rpcErr");
+      }
+
+      // 2. Fallback thủ công nếu RPC chưa tạo trên DB
       final lockPayload = <String, dynamic>{
         'court_id': courtId,
         'slot_index': slotIndex,
@@ -116,19 +142,14 @@ class BookingRemoteDatasource {
       if (actualUserId != null) {
         lockPayload['user_id'] = actualUserId;
       }
-      if (lockToken != null && lockToken.isNotEmpty) {
-        lockPayload['lock_token'] = lockToken;
-      } else if (actualUserId == null) {
-        final guestToken = await SessionService.instance.getGuestSessionToken();
-        lockPayload['lock_token'] = guestToken;
+      if (token != null) {
+        lockPayload['lock_token'] = token;
       }
 
-      // 1. Thử insert với cả lock_token
       try {
         await supabaseClient.from('court_locks').insert(lockPayload);
         return true;
       } catch (insertErr) {
-        // Fallback nếu cột lock_token chưa được nạp
         if (actualUserId != null) {
           await supabaseClient.from('court_locks').insert({
             'court_id': courtId,
@@ -143,14 +164,60 @@ class BookingRemoteDatasource {
       }
     } catch (e) {
       debugPrint("Lỗi giữ chỗ slot $slotIndex sân $courtId: $e");
-      // Trả về false để UI không cho phép thêm vào giỏ và thông báo cho người dùng
       return false;
+    }
+  }
+
+  /// Xác thực toàn bộ các slot trước khi cho phép bấm TIẾP THEO
+  /// Trả về kết quả xác thực chi tiết (success, conflict_slot, message)
+  Future<Map<String, dynamic>> verifyAndHoldSlotsBatch({
+    required List<Map<String, dynamic>> slots,
+    String? lockToken,
+    int durationMinutes = 10,
+  }) async {
+    try {
+      final authUser = supabaseClient.auth.currentUser;
+      final actualUserId = authUser?.id;
+      final token = (lockToken != null && lockToken.isNotEmpty)
+          ? lockToken
+          : (actualUserId == null ? await SessionService.instance.getGuestSessionToken() : null);
+
+      final res = await supabaseClient.rpc('verify_and_hold_slots_batch', params: {
+        'p_slots': slots,
+        'p_user_id': actualUserId,
+        'p_lock_token': token,
+        'p_duration_minutes': durationMinutes,
+      });
+
+      if (res is Map) {
+        return Map<String, dynamic>.from(res);
+      }
+      return {'success': true};
+    } catch (e) {
+      debugPrint("RPC verify_and_hold_slots_batch fallback sang extend: $e");
+      // Fallback nếu function chưa deploy: cố gắng gia hạn
+      await extendCourtLocks(slots: slots, lockToken: lockToken, durationMinutes: durationMinutes);
+      return {'success': true};
     }
   }
 
   Future<void> deleteLock(String courtId, int slotIndex, String date, String userId, {String? lockToken}) async {
     try {
       final authUser = supabaseClient.auth.currentUser;
+      final actualUserId = authUser?.id;
+      final token = lockToken ?? (actualUserId == null ? await SessionService.instance.getGuestSessionToken() : null);
+
+      try {
+        await supabaseClient.rpc('release_court_lock', params: {
+          'p_court_id': courtId,
+          'p_slot_index': slotIndex,
+          'p_booking_date': date,
+          'p_user_id': actualUserId,
+          'p_lock_token': token,
+        });
+        return;
+      } catch (_) {}
+
       if (authUser != null) {
         await supabaseClient
             .from('court_locks')
@@ -160,7 +227,6 @@ class BookingRemoteDatasource {
             .eq('booking_date', date)
             .eq('user_id', authUser.id);
       } else {
-        final token = lockToken ?? await SessionService.instance.getGuestSessionToken();
         try {
           await supabaseClient
               .from('court_locks')
@@ -168,7 +234,7 @@ class BookingRemoteDatasource {
               .eq('court_id', courtId)
               .eq('slot_index', slotIndex)
               .eq('booking_date', date)
-              .eq('lock_token', token);
+              .eq('lock_token', token ?? '');
         } catch (_) {
           await supabaseClient
               .from('court_locks')
@@ -354,7 +420,7 @@ class BookingRemoteDatasource {
         .insert(cleanData)
         .select()
         .single();
-    return response as Map<String, dynamic>;
+    return response;
   }
 
   Future<void> updateEventBookingStatus(String bookingId, String status) async {

@@ -85,6 +85,25 @@ class AppRouter {
       return null;
     },
     routes: [
+      // Auth routes (độc lập, không chứa bottom navigation bar)
+      GoRoute(
+        path: '/login',
+        name: 'login',
+        builder: (context, state) => const LoginPage(),
+      ),
+
+      GoRoute(
+        path: '/register',
+        name: 'register',
+        builder: (context, state) => const RegisterPage(),
+      ),
+
+      GoRoute(
+        path: '/forgetpass',
+        name: 'forgetpass',
+        builder: (context, state) => const ForgetpassPage(),
+      ),
+
       // ShellRoute Khách hàng
       ShellRoute(
         builder: (context, state, child) {
@@ -94,24 +113,6 @@ class AppRouter {
           );
         },
         routes: [
-          GoRoute(
-            path: '/login',
-            name: 'login',
-            builder: (context, state) => const LoginPage(),
-          ),
-
-          GoRoute(
-            path: '/register',
-            name: 'register',
-            builder: (context, state) => const RegisterPage(),
-          ),
-
-          GoRoute(
-            path: '/forgetpass',
-            name: 'forgetpass',
-            builder: (context, state) => const ForgetpassPage(),
-          ),
-
           // Customer routes
           GoRoute(
             path: '/home',

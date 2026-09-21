@@ -35,9 +35,13 @@ class _LoginPageState extends State<LoginPage> {
         backgroundColor: AppColors.backgroundLight,
         leading: IconButton(
           onPressed: () {
-            context.pop();
+            if (context.canPop()) {
+              context.pop();
+            } else {
+              context.go('/home');
+            }
           },
-          icon: Icon(Icons.arrow_back_ios_new),
+          icon: const Icon(Icons.arrow_back_ios_new),
         ),
       ),
       body: SafeArea(

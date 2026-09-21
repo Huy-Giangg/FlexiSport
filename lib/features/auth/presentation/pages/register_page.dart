@@ -40,7 +40,11 @@ class _RegisterPageState extends State<RegisterPage> {
         backgroundColor: AppColors.backgroundLight,
         leading: IconButton(
           onPressed: () {
-            context.pop();
+            if (context.canPop()) {
+              context.pop();
+            } else {
+              context.go('/home');
+            }
           },
           icon: const Icon(Icons.arrow_back_ios_new),
         ),

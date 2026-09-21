@@ -131,6 +131,7 @@ class _VisualBookingPageState extends State<VisualBookingPage> {
   late BookingProvider _bookingProvider;
 
   bool _isVenueLoading = true;
+  bool _isValidatingSlots = false;
 
   @override
   void didChangeDependencies() {
@@ -289,7 +290,7 @@ class _VisualBookingPageState extends State<VisualBookingPage> {
   }
 
   // Xử lý sự kiện khi chạm vào một ô lưới giờ
-  void _onSlotTap(String courtId, int slotIndex, SlotStatus status, {bool isPast = false}) {
+  void _onSlotTap(String courtId, int slotIndex, SlotStatus status, {bool isPast = false}) async {
     final bookingProvider = context.read<BookingProvider>();
     final court = bookingProvider.courts.firstWhere(
       (c) => c.id == courtId,
@@ -364,31 +365,40 @@ class _VisualBookingPageState extends State<VisualBookingPage> {
       return;
     }
 
+    // Đảm bảo có token phiên làm việc trước khi gọi RPC giữ chỗ
+    String token = _guestToken;
+    if (token.isEmpty) {
+      token = await SessionService.instance.getGuestSessionToken();
+      if (mounted) {
+        _guestToken = token;
+      }
+    }
+
     // 5. Chọn mới ô này: Kiểm tra & Giữ chỗ tức thì trong DB trước khi cho vào giỏ
-    bookingProvider.holdCourtSlot(
+    final success = await bookingProvider.holdCourtSlot(
       venueId: widget.venueId,
       courtId: courtId,
       slotIndex: slotIndex,
       date: _formattedQueryDate,
       userId: _userId,
-      lockToken: _guestToken,
-    ).then((success) {
-      if (!mounted) return;
-      if (success) {
-        setState(() {
-          _selectedSlots.add(slotKey);
-        });
-      } else {
-        ScaffoldMessenger.of(context).hideCurrentSnackBar();
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text("Khung giờ này vừa có người giữ chỗ hoặc đã được đặt trước! Vui lòng chọn ô khác."),
-            backgroundColor: Colors.redAccent,
-            duration: Duration(seconds: 2),
-          ),
-        );
-      }
-    });
+      lockToken: token,
+    );
+
+    if (!mounted) return;
+    if (success) {
+      setState(() {
+        _selectedSlots.add(slotKey);
+      });
+    } else {
+      ScaffoldMessenger.of(context).hideCurrentSnackBar();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("Khung giờ này vừa có người giữ chỗ hoặc đã được đặt trước! Vui lòng chọn ô khác."),
+          backgroundColor: Colors.redAccent,
+          duration: Duration(seconds: 2),
+        ),
+      );
+    }
   }
 
   List<SelectedSlotDetail> _buildSelectedSlotDetails(List<CourtEntity> courts, List<String> timeLabels, String openTime) {
@@ -1126,11 +1136,13 @@ class _VisualBookingPageState extends State<VisualBookingPage> {
                     ),
                   ),
 
-                  // Nút TIẾP THEO
+                  // Nút TIẾP THEO: Xác thực nguyên tử & Gia hạn giữ chỗ 10 phút trước khi vào điền thông tin
                   ElevatedButton(
-                    onPressed: hasSelection
-                        ? () {
-                            final slotDetails = _buildSelectedSlotDetails(courts, timeLabels, venue.open_time);
+                    onPressed: (hasSelection && !_isValidatingSlots)
+                        ? () async {
+                            setState(() {
+                              _isValidatingSlots = true;
+                            });
 
                             final List<Map<String, dynamic>> rawSlots = [];
                             for (final key in _selectedSlots) {
@@ -1144,6 +1156,71 @@ class _VisualBookingPageState extends State<VisualBookingPage> {
                                 'booking_date': _formattedQueryDate,
                               });
                             }
+
+                            // 1. Xác thực toàn bộ các khung giờ và gia hạn 10 phút độc quyền trên DB
+                            final result = await _bookingProvider.verifyAndHoldSelectedSlots(
+                              venueId: widget.venueId,
+                              date: _formattedQueryDate,
+                              slots: rawSlots,
+                              lockToken: _guestToken,
+                              durationMinutes: 10,
+                            );
+
+                            if (!mounted) return;
+                            setState(() {
+                              _isValidatingSlots = false;
+                            });
+
+                            // 2. Nếu có slot bị xung đột hoặc đã bị người khác đặt -> CHẶN NGAY TẠI ĐÂY!
+                            if (result['success'] != true) {
+                              final errorMsg = result['message']?.toString() ??
+                                  "Một trong các khung giờ bạn chọn vừa có người khác giữ chỗ hoặc đã được đặt trước!";
+
+                              if (result['conflict_slot'] is Map) {
+                                final cSlot = result['conflict_slot'] as Map;
+                                final conflictKey = "${cSlot['court_id']}_${cSlot['slot_index']}";
+                                setState(() {
+                                  _selectedSlots.remove(conflictKey);
+                                });
+                              }
+
+                              showDialog(
+                                context: context,
+                                builder: (ctx) => AlertDialog(
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                                  title: Row(
+                                    children: const [
+                                      Icon(Icons.warning_amber_rounded, color: Colors.orange, size: 28),
+                                      SizedBox(width: 8),
+                                      Expanded(
+                                        child: Text(
+                                          "Khung giờ không khả dụng",
+                                          style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  content: Text(
+                                    "$errorMsg\n\nHệ thống đã tự động cập nhật lịch sân. Vui lòng kiểm tra và chọn lại khung giờ phù hợp.",
+                                    style: const TextStyle(fontSize: 14.5, height: 1.45),
+                                  ),
+                                  actions: [
+                                    ElevatedButton(
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor: const Color(0xFF016B34),
+                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                      ),
+                                      onPressed: () => Navigator.of(ctx).pop(),
+                                      child: const Text("ĐÃ HIỂU", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                                    ),
+                                  ],
+                                ),
+                              );
+                              return;
+                            }
+
+                            // 3. Toàn bộ khung giờ đã được đảm bảo an toàn 100% -> Chuyển sang điền thông tin
+                            final slotDetails = _buildSelectedSlotDetails(courts, timeLabels, venue.open_time);
 
                             final args = PaymentInfoArgs(
                               venue: venue,
@@ -1170,13 +1247,26 @@ class _VisualBookingPageState extends State<VisualBookingPage> {
                     ),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
-                      children: const [
-                        Text(
-                          "TIẾP THEO",
-                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
-                        ),
-                        SizedBox(width: 6),
-                        Icon(Icons.arrow_forward_ios, size: 14),
+                      children: [
+                        if (_isValidatingSlots) ...[
+                          const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                          ),
+                          const SizedBox(width: 8),
+                          const Text(
+                            "ĐANG KIỂM TRA...",
+                            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                          ),
+                        ] else ...[
+                          const Text(
+                            "TIẾP THEO",
+                            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                          ),
+                          const SizedBox(width: 6),
+                          const Icon(Icons.arrow_forward_ios, size: 14),
+                        ],
                       ],
                     ),
                   ),

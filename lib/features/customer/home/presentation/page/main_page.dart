@@ -90,21 +90,25 @@ class _MainPageState extends State<MainPage> {
     }
     final currentIndex = _getIndex(location);
     final isVisible = context.watch<MainPageProvider>().isVisible;
+    final isAuthRoute = location == '/login' ||
+        location == '/register' ||
+        location == '/forgetpass';
+    final shouldShowNavBar = isVisible && !isAuthRoute;
 
     return Scaffold(
       body: widget.child,
 
-      bottomNavigationBar: isVisible
+      bottomNavigationBar: shouldShowNavBar
           ? Container(
               decoration: BoxDecoration(
-                borderRadius: BorderRadius.vertical(top: Radius.circular(12)),
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
                 color: Colors.white,
 
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.green.withOpacity(0.5),
+                    color: Colors.green.withValues(alpha: 0.5),
                     blurRadius: 15,
-                    offset: Offset(0, 5),
+                    offset: const Offset(0, 5),
                   ),
                 ],
               ),
@@ -112,7 +116,7 @@ class _MainPageState extends State<MainPage> {
               child: GNav(
                 selectedIndex: currentIndex,
                 onTabChange: _onTabChange,
-                tabBackgroundColor: AppColors.primary.withOpacity(0.9),
+                tabBackgroundColor: AppColors.primary.withValues(alpha: 0.9),
                 color: Colors.grey,
                 activeColor: Colors.white,
                 gap: 8,

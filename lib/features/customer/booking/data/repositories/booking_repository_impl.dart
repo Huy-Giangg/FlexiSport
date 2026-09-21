@@ -104,6 +104,19 @@ class BookingRepositoryImpl implements BookingRepository{
   }
 
   @override
+  Future<Map<String, dynamic>> verifyAndHoldSlotsBatch(
+    List<Map<String, dynamic>> slots, {
+    String? lockToken,
+    int durationMinutes = 10,
+  }) async {
+    return await remoteDatasource.verifyAndHoldSlotsBatch(
+      slots: slots,
+      lockToken: lockToken,
+      durationMinutes: durationMinutes,
+    );
+  }
+
+  @override
   Future<List<EventEntity>> getEvents(String venueId) async {
     final list = await remoteDatasource.fetchEvents(venueId);
     return list.map((json) => EventModel.fromJson(json)).toList();
