@@ -147,11 +147,22 @@ class OwnerBookingRemoteDataSource {
             'note': reason,
           }).eq('id', bookingId);
         } catch (_) {
-          await supabaseClient.from('bookings').update({
-            'status': 'cancelled',
-          }).eq('id', bookingId);
+          try {
+            await supabaseClient.from('bookings').update({
+              'status': 'cancelled',
+            }).eq('id', bookingId);
+          } catch (_) {}
         }
       }
+    }
+
+    // 2. Giải phóng slots đặt để không bị khóa vĩnh viễn
+    try {
+      await supabaseClient.from('booking_slots').update({'is_active': false}).eq('booking_id', bookingId);
+    } catch (_) {
+      try {
+        await supabaseClient.from('booking_slots').delete().eq('booking_id', bookingId);
+      } catch (_) {}
     }
   }
 
@@ -169,17 +180,42 @@ class OwnerBookingRemoteDataSource {
   }) async {
     final user = supabaseClient.auth.currentUser;
 
-    // 1. Xóa tạm thời các lock trong court_locks (nếu có) để tránh xung đột
-    try {
-      for (final slot in slotIndexes) {
-        await supabaseClient
+    // 1. Kiểm tra an toàn: Không cho phép tạo đơn đè lên khách online đang giữ chỗ hoặc quét QR
+    final nowIso = DateTime.now().toUtc().toIso8601String();
+    for (final slot in slotIndexes) {
+      try {
+        final activeLock = await supabaseClient
             .from('court_locks')
-            .delete()
+            .select('id, locked_until')
             .eq('court_id', courtId)
             .eq('booking_date', bookingDate)
-            .eq('slot_index', slot);
+            .eq('slot_index', slot)
+            .gt('locked_until', nowIso)
+            .maybeSingle();
+
+        if (activeLock != null) {
+          throw Exception('Khung giờ slot $slot đang có khách online giữ chỗ/quét QR. Không thể tạo đè!');
+        }
+
+        final activeBooking = await supabaseClient
+            .from('booking_slots')
+            .select('id, bookings!inner(status)')
+            .eq('court_id', courtId)
+            .eq('booking_date', bookingDate)
+            .eq('slot_index', slot)
+            .eq('is_active', true)
+            .inFilter('bookings.status', ['confirmed', 'completed', 'pending_payment'])
+            .maybeSingle();
+
+        if (activeBooking != null) {
+          throw Exception('Khung giờ slot $slot đã được đặt trước hoặc đang chờ thanh toán!');
+        }
+      } catch (checkErr) {
+        if (checkErr.toString().contains('đang có khách') || checkErr.toString().contains('đã được đặt trước')) {
+          rethrow;
+        }
       }
-    } catch (_) {}
+    }
 
     // 2. Insert vào bảng bookings (chỉ dùng các cột chuẩn)
     final Map<String, dynamic> bookingPayload = {
@@ -201,17 +237,31 @@ class OwnerBookingRemoteDataSource {
 
     final bookingId = bookingInsert['id'].toString();
 
-    // 3. Batch insert vào bảng booking_slots
+    // 3. Batch insert vào bảng booking_slots với is_active = true
     final List<Map<String, dynamic>> slotsToInsert = slotIndexes.map((slot) {
       return {
         'booking_id': bookingId,
         'court_id': courtId,
         'booking_date': bookingDate,
         'slot_index': slot,
+        'is_active': true,
       };
     }).toList();
 
-    await supabaseClient.from('booking_slots').insert(slotsToInsert);
+    try {
+      await supabaseClient.from('booking_slots').insert(slotsToInsert);
+    } catch (_) {
+      // Fallback không có is_active
+      final fallbackSlots = slotIndexes.map((slot) {
+        return {
+          'booking_id': bookingId,
+          'court_id': courtId,
+          'booking_date': bookingDate,
+          'slot_index': slot,
+        };
+      }).toList();
+      await supabaseClient.from('booking_slots').insert(fallbackSlots);
+    }
 
     // 4. Nếu có thanh toán/đặt cọc tại quầy -> Tạo bản ghi payments
     try {

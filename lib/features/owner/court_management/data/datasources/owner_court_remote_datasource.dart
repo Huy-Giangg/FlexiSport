@@ -3,6 +3,7 @@ import 'package:flexisport_app/features/owner/court_management/data/models/owner
 import 'package:flexisport_app/features/owner/court_management/data/models/owner_venue_model.dart';
 import 'package:flexisport_app/features/owner/court_management/domain/entities/court_slot_status_entity.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:flexisport_app/core/services/court_pricing_service.dart';
 
 class OwnerCourtRemoteDataSource {
   final SupabaseClient supabaseClient;
@@ -365,6 +366,15 @@ class OwnerCourtRemoteDataSource {
           .eq('id', courtId)
           .select()
           .single();
+
+      CourtPricingService.instance.registerCourtPricing(
+        courtId: courtId,
+        normalPrice: pricePerHour,
+        peakPrice: peakPrice ?? (pricePerHour * 1.3).roundToDouble(),
+        applyPeak: applyPeak ?? true,
+        weekendSurcharge: weekendSurcharge ?? 20000.0,
+        applyWeekend: applyWeekend ?? true,
+      );
 
       return OwnerCourtModel.fromJson(response);
     } catch (e) {

@@ -22,19 +22,29 @@ class PaymentRemoteDatasource {
     required String phone,
     required String note,
     required List<Map<String, dynamic>> slots,
+    String? lockToken,
   }) async {
     try {
-      final response = await _supabase.rpc(
-        'create_booking_transaction',
-        params: {
-          'p_user_id': userId == 'guest_user' ? null : userId,
-          'p_total_amount': totalAmount,
-          'p_customer_name': name,
-          'p_customer_phone': phone,
-          'p_note': note,
-          'p_slots': slots, // JSON Array formatted slots
-        },
-      );
+      final params = <String, dynamic>{
+        'p_user_id': (userId == 'guest_user' || userId == null || userId.isEmpty) ? null : userId,
+        'p_total_amount': totalAmount,
+        'p_customer_name': name,
+        'p_customer_phone': phone,
+        'p_note': note,
+        'p_slots': slots,
+      };
+      if (lockToken != null && lockToken.isNotEmpty) {
+        params['p_lock_token'] = lockToken;
+      }
+
+      dynamic response;
+      try {
+        response = await _supabase.rpc('create_booking_transaction', params: params);
+      } catch (rpcErr) {
+        // Fallback không truyền p_lock_token nếu DB dùng hàm cũ
+        params.remove('p_lock_token');
+        response = await _supabase.rpc('create_booking_transaction', params: params);
+      }
 
       if (response == null) {
         throw Exception("Không thể khởi tạo giao dịch thanh toán.");

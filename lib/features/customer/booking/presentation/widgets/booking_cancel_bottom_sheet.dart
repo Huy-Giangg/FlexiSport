@@ -325,9 +325,7 @@ class _BookingCancelBottomSheetState extends State<BookingCancelBottomSheet> {
     try {
       final supabase = Supabase.instance.client;
 
-      // Cập nhật trạng thái đơn sang đã hủy và lưu lý do (giữ nguyên booking_slots để không mất thông tin ngày giờ, sân)
-
-      // 2. Cập nhật trạng thái đơn sang đã hủy và cập nhật lý do
+      // 1. Cập nhật trạng thái đơn sang đã hủy và cập nhật lý do
       try {
         await supabase.from('bookings').update({
           'status': 'cancelled',
@@ -345,6 +343,39 @@ class _BookingCancelBottomSheetState extends State<BookingCancelBottomSheet> {
           }).eq('id', bookingId);
         }
       }
+
+      // 2. Giải phóng slot đặt để không bị khóa vĩnh viễn
+      try {
+        await supabase
+            .from('booking_slots')
+            .update({'is_active': false})
+            .eq('booking_id', bookingId);
+      } catch (_) {
+        // Fallback: xóa slots nếu DB chưa có cột is_active
+        try {
+          await supabase.from('booking_slots').delete().eq('booking_id', bookingId);
+        } catch (_) {}
+      }
+
+      // 3. Giải phóng court_locks nếu còn tồn tại
+      try {
+        final slots = widget.booking['booking_slots'] as List?;
+        if (slots != null) {
+          for (final s in slots) {
+            final cId = s['court_id']?.toString() ?? '';
+            final bDate = s['booking_date']?.toString() ?? '';
+            final sIdx = (s['slot_index'] as num?)?.toInt() ?? 0;
+            if (cId.isNotEmpty && bDate.isNotEmpty) {
+              await supabase
+                  .from('court_locks')
+                  .delete()
+                  .eq('court_id', cId)
+                  .eq('booking_date', bDate)
+                  .eq('slot_index', sIdx);
+            }
+          }
+        }
+      } catch (_) {}
 
       // 3. Gửi thông báo cục bộ tới người dùng (Khách hàng)
       try {

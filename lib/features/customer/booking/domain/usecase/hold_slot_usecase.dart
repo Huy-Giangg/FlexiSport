@@ -10,7 +10,8 @@ class HoldSlotUsecase {
     required int slotIndex,
     required String date,
     required String userId,
+    String? lockToken,
   }) {
-    return repository.holdSlot(courtId, slotIndex, date, userId);
+    return repository.holdSlot(courtId, slotIndex, date, userId, lockToken: lockToken);
   }
 }

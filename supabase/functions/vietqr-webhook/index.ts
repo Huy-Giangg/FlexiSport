@@ -177,19 +177,92 @@ serve(async (req) => {
       })
     }
 
-    // 5. Update Database within transaction (Payment -> SUCCESS, Booking -> CONFIRMED, Clear court_locks)
+    // 5. Update Database with slot safety verification (Payment -> SUCCESS, Booking -> COMPLETED)
     const bookingId = paymentRecord.booking_id
 
-    // Query bookings table directly to fetch user_id
+    // Query bookings table directly to fetch status & user_id
     const { data: bookingRecord } = await client
       .from('bookings')
-      .select('user_id')
+      .select('user_id, status, customer_name, customer_phone')
       .eq('id', bookingId)
       .single()
 
     const userId = bookingRecord?.user_id
+    const isCancelled = bookingRecord?.status === 'cancelled'
 
-    // Update payment
+    // Fetch slots associated with this booking
+    const { data: bookedSlots } = await client
+      .from('booking_slots')
+      .select('id, court_id, booking_date, slot_index, is_active')
+      .eq('booking_id', bookingId)
+
+    // Check if any slot has been taken by another active booking (stolen slot protection)
+    let isSlotStolen = false
+    if (bookedSlots && bookedSlots.length > 0) {
+      for (const slot of bookedSlots) {
+        const { data: conflict } = await client
+          .from('booking_slots')
+          .select('id, bookings!inner(status)')
+          .eq('court_id', slot.court_id)
+          .eq('booking_date', slot.booking_date)
+          .eq('slot_index', slot.slot_index)
+          .neq('booking_id', bookingId)
+          .eq('is_active', true)
+          .in('bookings.status', ['completed', 'confirmed', 'pending_payment'])
+          .maybeSingle()
+
+        if (conflict) {
+          isSlotStolen = true
+          break
+        }
+      }
+    }
+
+    if (isSlotStolen) {
+      console.warn(`CRITICAL: Slot for booking ${bookingId} was taken while customer was paying! Reference: ${paymentRef}`)
+      
+      // Update payment record as overdue and flag for immediate refund
+      await client
+        .from('payments')
+        .update({
+          status: 'REFUND_REQUIRED',
+          transaction_code: transactionCode,
+          raw_callback_data: payload,
+          paid_at: new Date().toISOString()
+        })
+        .eq('id', paymentRecord.id)
+
+      await client
+        .from('bookings')
+        .update({
+          status: 'cancelled',
+          note: `Đã nhận chuyển khoản ${amount}đ (${paymentRef}) nhưng khung giờ đã bị người khác đặt trước do quá hạn giữ chỗ. CẦN HOÀN TIỀN CHO KHÁCH.`
+        })
+        .eq('id', bookingId)
+
+      // Notify customer and owner
+      try {
+        if (userId) {
+          await client.from('notifications').insert({
+            user_id: userId,
+            title: 'Khung giờ đặt sân đã bị trùng',
+            body: `Giao dịch ${paymentRef} thành công nhưng khung giờ đã bị người khác đặt trước. Hệ thống/chủ sân sẽ liên hệ hoàn tiền cho bạn.`,
+            type: 'booking_conflict'
+          })
+        }
+      } catch (_) {}
+
+      return new Response(JSON.stringify({ 
+        success: false, 
+        status: "REFUND_REQUIRED",
+        message: "Payment received but slot was already booked by another user. Marked for refund." 
+      }), { 
+        status: 200, 
+        headers: { ...corsHeaders, "Content-Type": "application/json" } 
+      })
+    }
+
+    // Update payment to SUCCESS
     const { error: updatePaymentError } = await client
       .from('payments')
       .update({
@@ -204,7 +277,15 @@ serve(async (req) => {
       throw new Error(`Failed to update payments: ${updatePaymentError.message}`)
     }
 
-    // Update booking status to completed (lowercase, expected by the app)
+    // Re-activate slots if they were marked inactive on cancel
+    if (bookedSlots && bookedSlots.length > 0) {
+      await client
+        .from('booking_slots')
+        .update({ is_active: true })
+        .eq('booking_id', bookingId)
+    }
+
+    // Update booking status to completed
     const { error: updateBookingError } = await client
       .from('bookings')
       .update({ 
@@ -216,16 +297,22 @@ serve(async (req) => {
       throw new Error(`Failed to update bookings: ${updateBookingError.message}`)
     }
 
-    // Release temporary locks in court_locks
+    // Release temporary locks in court_locks for these specific slots
+    if (bookedSlots && bookedSlots.length > 0) {
+      for (const slot of bookedSlots) {
+        await client
+          .from('court_locks')
+          .delete()
+          .eq('court_id', slot.court_id)
+          .eq('booking_date', slot.booking_date)
+          .eq('slot_index', slot.slot_index)
+      }
+    }
     if (userId) {
-      const { error: deleteLocksError } = await client
+      await client
         .from('court_locks')
         .delete()
         .eq('user_id', userId)
-      
-      if (deleteLocksError) {
-        console.warn(`Warning: Failed to clear court_locks: ${deleteLocksError.message}`)
-      }
     }
 
     console.log(`Transaction ${paymentRef} processed successfully. Booking ${bookingId} confirmed.`);

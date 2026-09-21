@@ -2,6 +2,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flexisport_app/features/customer/booking/data/models/court_model.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:flexisport_app/core/services/session_service.dart';
 
 class BookingRemoteDatasource {
   final SupabaseClient supabaseClient;
@@ -21,31 +22,52 @@ class BookingRemoteDatasource {
 
   Future<List<Map<String, dynamic>>> fetchActiveLocks(String venueId, String date) async {
     final nowIso = DateTime.now().toUtc().toIso8601String();
-    final response = await supabaseClient
-        .from('court_locks')
-        .select('id, court_id, slot_index, booking_date, user_id, locked_until, courts!inner(venue_id)')
-        .eq('booking_date', date)
-        .eq('courts.venue_id', venueId)
-        .gt('locked_until', nowIso);
-    return List<Map<String, dynamic>>.from(response as List);
+    try {
+      final response = await supabaseClient
+          .from('court_locks')
+          .select('id, court_id, slot_index, booking_date, user_id, lock_token, locked_until, courts!inner(venue_id)')
+          .eq('booking_date', date)
+          .eq('courts.venue_id', venueId)
+          .gt('locked_until', nowIso);
+      return List<Map<String, dynamic>>.from(response as List);
+    } catch (_) {
+      final response = await supabaseClient
+          .from('court_locks')
+          .select('id, court_id, slot_index, booking_date, user_id, locked_until, courts!inner(venue_id)')
+          .eq('booking_date', date)
+          .eq('courts.venue_id', venueId)
+          .gt('locked_until', nowIso);
+      return List<Map<String, dynamic>>.from(response as List);
+    }
   }
 
   Future<List<Map<String, dynamic>>> fetchBookedSlots(String venueId, String date) async {
     try {
       final response = await supabaseClient
           .from('booking_slots')
-          .select('id, booking_id, court_id, booking_date, slot_index, bookings!inner(status), courts!inner(venue_id)')
+          .select('id, booking_id, court_id, booking_date, slot_index, is_active, bookings!inner(status), courts!inner(venue_id)')
           .eq('booking_date', date)
           .eq('courts.venue_id', venueId)
+          .eq('is_active', true)
           .neq('bookings.status', 'cancelled');
       return List<Map<String, dynamic>>.from(response as List);
     } catch (_) {
-      final response = await supabaseClient
-          .from('booking_slots')
-          .select('id, booking_id, court_id, booking_date, slot_index, courts!inner(venue_id)')
-          .eq('booking_date', date)
-          .eq('courts.venue_id', venueId);
-      return List<Map<String, dynamic>>.from(response as List);
+      try {
+        final response = await supabaseClient
+            .from('booking_slots')
+            .select('id, booking_id, court_id, booking_date, slot_index, bookings!inner(status), courts!inner(venue_id)')
+            .eq('booking_date', date)
+            .eq('courts.venue_id', venueId)
+            .neq('bookings.status', 'cancelled');
+        return List<Map<String, dynamic>>.from(response as List);
+      } catch (e2) {
+        final response = await supabaseClient
+            .from('booking_slots')
+            .select('id, booking_id, court_id, booking_date, slot_index, courts!inner(venue_id)')
+            .eq('booking_date', date)
+            .eq('courts.venue_id', venueId);
+        return List<Map<String, dynamic>>.from(response as List);
+      }
     }
   }
 
@@ -79,45 +101,138 @@ class BookingRemoteDatasource {
     }
   }
 
-  Future<bool> insertLock(String courtId, int slotIndex, String date, String userId) async {
+  Future<bool> insertLock(String courtId, int slotIndex, String date, String userId, {String? lockToken}) async {
     try {
-      final actualUserId = supabaseClient.auth.currentUser?.id ??
-          ((userId.isNotEmpty && userId != 'guest_user') ? userId : 'b5271460-f765-45cf-a3bd-ce7229ef6901');
+      final authUser = supabaseClient.auth.currentUser;
+      final actualUserId = authUser?.id;
 
-      await supabaseClient.from('court_locks').insert({
+      final lockPayload = <String, dynamic>{
         'court_id': courtId,
         'slot_index': slotIndex,
         'booking_date': date,
-        'user_id': actualUserId,
-      });
-      return true;
+        'locked_until': DateTime.now().toUtc().add(const Duration(minutes: 5)).toIso8601String(),
+      };
+
+      if (actualUserId != null) {
+        lockPayload['user_id'] = actualUserId;
+      }
+      if (lockToken != null && lockToken.isNotEmpty) {
+        lockPayload['lock_token'] = lockToken;
+      } else if (actualUserId == null) {
+        final guestToken = await SessionService.instance.getGuestSessionToken();
+        lockPayload['lock_token'] = guestToken;
+      }
+
+      // 1. Thử insert với cả lock_token
+      try {
+        await supabaseClient.from('court_locks').insert(lockPayload);
+        return true;
+      } catch (insertErr) {
+        // Fallback nếu cột lock_token chưa được nạp
+        if (actualUserId != null) {
+          await supabaseClient.from('court_locks').insert({
+            'court_id': courtId,
+            'slot_index': slotIndex,
+            'booking_date': date,
+            'user_id': actualUserId,
+            'locked_until': DateTime.now().toUtc().add(const Duration(minutes: 5)).toIso8601String(),
+          });
+          return true;
+        }
+        rethrow;
+      }
     } catch (e) {
-      // Nếu không insert được court_locks (vd: constraint hoặc offline), vẫn cho phép chọn ở UI
-      return true;
+      debugPrint("Lỗi giữ chỗ slot $slotIndex sân $courtId: $e");
+      // Trả về false để UI không cho phép thêm vào giỏ và thông báo cho người dùng
+      return false;
     }
   }
 
-  Future<void> deleteLock(String courtId, int slotIndex, String date, String userId) async {
+  Future<void> deleteLock(String courtId, int slotIndex, String date, String userId, {String? lockToken}) async {
     try {
-      final actualUserId = supabaseClient.auth.currentUser?.id ??
-          ((userId.isNotEmpty && userId != 'guest_user') ? userId : 'b5271460-f765-45cf-a3bd-ce7229ef6901');
-
-      await supabaseClient
-          .from('court_locks')
-          .delete()
-          .eq('court_id', courtId)
-          .eq('slot_index', slotIndex)
-          .eq('booking_date', date)
-          .eq('user_id', actualUserId);
+      final authUser = supabaseClient.auth.currentUser;
+      if (authUser != null) {
+        await supabaseClient
+            .from('court_locks')
+            .delete()
+            .eq('court_id', courtId)
+            .eq('slot_index', slotIndex)
+            .eq('booking_date', date)
+            .eq('user_id', authUser.id);
+      } else {
+        final token = lockToken ?? await SessionService.instance.getGuestSessionToken();
+        try {
+          await supabaseClient
+              .from('court_locks')
+              .delete()
+              .eq('court_id', courtId)
+              .eq('slot_index', slotIndex)
+              .eq('booking_date', date)
+              .eq('lock_token', token);
+        } catch (_) {
+          await supabaseClient
+              .from('court_locks')
+              .delete()
+              .eq('court_id', courtId)
+              .eq('slot_index', slotIndex)
+              .eq('booking_date', date);
+        }
+      }
     } catch (_) {}
   }
 
-  Future<void> deleteAllUserLocks(String userId) async {
-    if (userId == 'guest_user' || userId.isEmpty) return;
-    await supabaseClient
-        .from('court_locks')
-        .delete()
-        .eq('user_id', userId);
+  Future<void> deleteAllUserLocks(String userId, {String? lockToken}) async {
+    try {
+      final authUser = supabaseClient.auth.currentUser;
+      if (authUser != null) {
+        await supabaseClient.from('court_locks').delete().eq('user_id', authUser.id);
+      } else {
+        final token = lockToken ?? await SessionService.instance.getGuestSessionToken();
+        try {
+          await supabaseClient.from('court_locks').delete().eq('lock_token', token);
+        } catch (_) {}
+      }
+    } catch (_) {}
+  }
+
+  Future<bool> extendCourtLocks({
+    required List<Map<String, dynamic>> slots,
+    String? lockToken,
+    int durationMinutes = 10,
+  }) async {
+    if (slots.isEmpty) return true;
+    try {
+      final authUser = supabaseClient.auth.currentUser;
+      final token = lockToken ?? await SessionService.instance.getGuestSessionToken();
+
+      try {
+        final response = await supabaseClient.rpc('extend_court_locks', params: {
+          'p_slots': slots,
+          'p_lock_token': token,
+          'p_user_id': authUser?.id,
+          'p_duration_minutes': durationMinutes,
+        });
+        if (response == true) return true;
+      } catch (_) {}
+
+      // Fallback: cập nhật trực tiếp locked_until
+      final nowExtended = DateTime.now().toUtc().add(Duration(minutes: durationMinutes)).toIso8601String();
+      for (final s in slots) {
+        final courtId = s['court_id']?.toString() ?? '';
+        final date = s['booking_date']?.toString() ?? '';
+        final slotIdx = (s['slot_index'] as num?)?.toInt() ?? 0;
+        await supabaseClient
+            .from('court_locks')
+            .update({'locked_until': nowExtended})
+            .eq('court_id', courtId)
+            .eq('booking_date', date)
+            .eq('slot_index', slotIdx);
+      }
+      return true;
+    } catch (e) {
+      debugPrint("Lỗi gia hạn locks: $e");
+      return false;
+    }
   }
 
   Future<List<Map<String, dynamic>>> fetchEvents(String venueId) async {

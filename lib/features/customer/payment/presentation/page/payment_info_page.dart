@@ -23,6 +23,8 @@ class PaymentInfoArgs {
   final List<SelectedSlotDetail> selectedSlots;
   final double totalAmount;
   final double totalHours;
+  final List<Map<String, dynamic>> rawSlots;
+  final String? lockToken;
 
   PaymentInfoArgs({
     required this.venue,
@@ -30,6 +32,8 @@ class PaymentInfoArgs {
     required this.selectedSlots,
     required this.totalAmount,
     required this.totalHours,
+    this.rawSlots = const [],
+    this.lockToken,
   });
 }
 

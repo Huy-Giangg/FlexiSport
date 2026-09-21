@@ -10,11 +10,12 @@ class ReleaseSlotUsecase {
     required int slotIndex,
     required String date,
     required String userId,
+    String? lockToken,
   }) {
-    return repository.releaseSlot(courtId, slotIndex, date, userId);
+    return repository.releaseSlot(courtId, slotIndex, date, userId, lockToken: lockToken);
   }
 
-  Future<void> releaseAll(String userId) {
-    return repository.releaseAllUserLocks(userId);
+  Future<void> releaseAll(String userId, {String? lockToken}) {
+    return repository.releaseAllUserLocks(userId, lockToken: lockToken);
   }
 }

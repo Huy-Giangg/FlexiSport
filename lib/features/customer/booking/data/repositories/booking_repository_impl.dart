@@ -80,18 +80,27 @@ class BookingRepositoryImpl implements BookingRepository{
   }
 
   @override
-  Future<bool> holdSlot(String courtId, int slotIndex, String date, String userId) async {
-    return await remoteDatasource.insertLock(courtId, slotIndex, date, userId);
+  Future<bool> holdSlot(String courtId, int slotIndex, String date, String userId, {String? lockToken}) async {
+    return await remoteDatasource.insertLock(courtId, slotIndex, date, userId, lockToken: lockToken);
   }
 
   @override
-  Future<void> releaseSlot(String courtId, int slotIndex, String date, String userId) async {
-    await remoteDatasource.deleteLock(courtId, slotIndex, date, userId);
+  Future<void> releaseSlot(String courtId, int slotIndex, String date, String userId, {String? lockToken}) async {
+    await remoteDatasource.deleteLock(courtId, slotIndex, date, userId, lockToken: lockToken);
   }
 
   @override
-  Future<void> releaseAllUserLocks(String userId) async {
-    await remoteDatasource.deleteAllUserLocks(userId);
+  Future<void> releaseAllUserLocks(String userId, {String? lockToken}) async {
+    await remoteDatasource.deleteAllUserLocks(userId, lockToken: lockToken);
+  }
+
+  @override
+  Future<bool> extendLocks(List<Map<String, dynamic>> slots, {String? lockToken, int durationMinutes = 10}) async {
+    return await remoteDatasource.extendCourtLocks(
+      slots: slots,
+      lockToken: lockToken,
+      durationMinutes: durationMinutes,
+    );
   }
 
   @override

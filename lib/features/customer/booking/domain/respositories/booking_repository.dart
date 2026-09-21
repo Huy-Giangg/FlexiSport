@@ -13,9 +13,10 @@ abstract class BookingRepository {
   Future<List<BookingSlotEntity>> getBookedSlots(String venueId, String date);
   Future<List<CourtBlockEntity>> getCourtBlocks(String venueId, String date);
   Future<List<EventSlotEntity>> getEventSlots(String venueId, String date);
-  Future<bool> holdSlot(String courtId, int slotIndex, String date, String userId);
-  Future<void> releaseSlot(String courtId, int slotIndex, String date, String userId);
-  Future<void> releaseAllUserLocks(String userId);
+  Future<bool> holdSlot(String courtId, int slotIndex, String date, String userId, {String? lockToken});
+  Future<void> releaseSlot(String courtId, int slotIndex, String date, String userId, {String? lockToken});
+  Future<void> releaseAllUserLocks(String userId, {String? lockToken});
+  Future<bool> extendLocks(List<Map<String, dynamic>> slots, {String? lockToken, int durationMinutes = 10});
   
   Future<List<EventEntity>> getEvents(String venueId);
   Future<int> getBookedTicketsCount(String eventId);

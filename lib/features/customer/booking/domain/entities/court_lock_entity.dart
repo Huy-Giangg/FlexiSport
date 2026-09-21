@@ -5,6 +5,7 @@ class CourtLockEntity {
   final String bookingDate;
   final String userId;
   final DateTime lockedUntil;
+  final String? lockToken;
 
   CourtLockEntity({
     required this.id,
@@ -13,6 +14,7 @@ class CourtLockEntity {
     required this.bookingDate,
     required this.userId,
     required this.lockedUntil,
+    this.lockToken,
   });
 
   bool get isExpired => DateTime.now().isAfter(lockedUntil);

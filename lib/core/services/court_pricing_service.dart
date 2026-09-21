@@ -1,5 +1,8 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:flexisport_app/features/customer/booking/domain/entities/court_entity.dart';
 
 class CourtPricingModel {
   final String courtId;
@@ -28,10 +31,14 @@ class CourtPricingModel {
       };
 
   factory CourtPricingModel.fromJson(Map<String, dynamic> json) {
+    final normal = (json['normal_price'] as num?)?.toDouble() ??
+        (json['price_per_hour'] as num?)?.toDouble() ??
+        140000.0;
+    final peak = (json['peak_price'] as num?)?.toDouble() ?? (normal * 1.3).roundToDouble();
     return CourtPricingModel(
-      courtId: json['court_id']?.toString() ?? '',
-      normalPrice: (json['normal_price'] as num?)?.toDouble() ?? 140000.0,
-      peakPrice: (json['peak_price'] as num?)?.toDouble() ?? 182000.0,
+      courtId: json['court_id']?.toString() ?? json['id']?.toString() ?? '',
+      normalPrice: normal,
+      peakPrice: peak,
       applyPeak: json['apply_peak'] == true || json['apply_peak'] == null,
       weekendSurcharge: (json['weekend_surcharge'] as num?)?.toDouble() ?? 20000.0,
       applyWeekend: json['apply_weekend'] == true || json['apply_weekend'] == null,
@@ -82,9 +89,59 @@ class CourtPricingService {
     _initialized = true;
   }
 
-  Future<CourtPricingModel> getPricing(String courtId, {double? fallbackBasePrice}) async {
-    await _ensureInitialized();
+  /// Đăng ký biểu giá từ CourtEntity/CourtModel đã nạp từ server
+  void registerCourtPricing({
+    required String courtId,
+    required double normalPrice,
+    required double peakPrice,
+    bool applyPeak = true,
+    double weekendSurcharge = 20000.0,
+    bool applyWeekend = true,
+  }) {
+    _cache[courtId] = CourtPricingModel(
+      courtId: courtId,
+      normalPrice: normalPrice,
+      peakPrice: peakPrice,
+      applyPeak: applyPeak,
+      weekendSurcharge: weekendSurcharge,
+      applyWeekend: applyWeekend,
+    );
+  }
 
+  /// Lấy cấu hình biểu giá từ Supabase nếu chưa có trong cache
+  Future<CourtPricingModel> getPricing(String courtId, {double? fallbackBasePrice, CourtEntity? court}) async {
+    if (court != null) {
+      registerCourtPricing(
+        courtId: court.id,
+        normalPrice: court.pricePerHour,
+        peakPrice: court.peakPrice,
+        applyPeak: court.applyPeak,
+        weekendSurcharge: court.weekendSurcharge,
+        applyWeekend: court.applyWeekend,
+      );
+      return _cache[court.id]!;
+    }
+
+    if (_cache.containsKey(courtId)) {
+      return _cache[courtId]!;
+    }
+
+    // Thử truy vấn từ Supabase
+    try {
+      final response = await Supabase.instance.client
+          .from('courts')
+          .select('id, price_per_hour, peak_price, apply_peak, weekend_surcharge, apply_weekend')
+          .eq('id', courtId)
+          .maybeSingle();
+
+      if (response != null) {
+        final model = CourtPricingModel.fromJson(response);
+        _cache[courtId] = model;
+        return model;
+      }
+    } catch (_) {}
+
+    await _ensureInitialized();
     if (_cache.containsKey(courtId)) {
       return _cache[courtId]!;
     }
@@ -104,10 +161,23 @@ class CourtPricingService {
     return config;
   }
 
-  CourtPricingModel getPricingSync(String courtId, {double? fallbackBasePrice}) {
+  CourtPricingModel getPricingSync(String courtId, {double? fallbackBasePrice, CourtEntity? court}) {
+    if (court != null) {
+      registerCourtPricing(
+        courtId: court.id,
+        normalPrice: court.pricePerHour,
+        peakPrice: court.peakPrice,
+        applyPeak: court.applyPeak,
+        weekendSurcharge: court.weekendSurcharge,
+        applyWeekend: court.applyWeekend,
+      );
+      return _cache[court.id]!;
+    }
+
     if (_cache.containsKey(courtId)) {
       return _cache[courtId]!;
     }
+
     final base = fallbackBasePrice ?? 140000.0;
     final peak = (base * 1.3).roundToDouble();
     return CourtPricingModel(
@@ -120,10 +190,24 @@ class CourtPricingService {
     );
   }
 
+  /// Lưu cấu hình giá: Cập nhật trực tiếp lên Supabase & đồng bộ in-memory
   Future<void> savePricing(CourtPricingModel config) async {
-    await _ensureInitialized();
     _cache[config.courtId] = config;
 
+    // 1. Cập nhật trực tiếp lên Supabase để mọi khách hàng đều thấy ngay lập tức
+    try {
+      await Supabase.instance.client.from('courts').update({
+        'price_per_hour': config.normalPrice,
+        'peak_price': config.peakPrice,
+        'apply_peak': config.applyPeak,
+        'weekend_surcharge': config.weekendSurcharge,
+        'apply_weekend': config.applyWeekend,
+      }).eq('id', config.courtId);
+    } catch (e) {
+      debugPrint("Lỗi cập nhật giá sân lên Supabase: $e");
+    }
+
+    // 2. Lưu bộ nhớ tạm SharedPreferences làm fallback
     try {
       final prefs = await SharedPreferences.getInstance();
       final mapToSave = _cache.map((key, value) => MapEntry(key, value.toJson()));
@@ -141,8 +225,9 @@ class CourtPricingService {
     required DateTime date,
     String? openTime,
     double? fallbackBasePrice,
+    CourtEntity? court,
   }) {
-    final pricing = getPricingSync(courtId, fallbackBasePrice: fallbackBasePrice);
+    final pricing = getPricingSync(courtId, fallbackBasePrice: fallbackBasePrice, court: court);
 
     // Tính phút bắt đầu của ca dựa theo giờ mở cửa của cơ sở
     int baseMinutes = 6 * 60;

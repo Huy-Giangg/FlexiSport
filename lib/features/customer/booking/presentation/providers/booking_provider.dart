@@ -16,7 +16,9 @@ import 'package:flexisport_app/features/customer/booking/domain/usecase/get_even
 import 'package:flexisport_app/features/customer/booking/domain/usecase/book_event_usecase.dart';
 import 'package:flexisport_app/features/customer/booking/domain/usecase/get_user_event_bookings_usecase.dart';
 import 'package:flutter/widgets.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flexisport_app/core/services/notification_service.dart';
+import 'package:flexisport_app/core/services/court_pricing_service.dart';
 
 class BookingProvider extends ChangeNotifier {
   final GetCourtsUsecase getCourtsUseCase;
@@ -73,18 +75,70 @@ class BookingProvider extends ChangeNotifier {
   String? _errorMessage;
   String? get errorMessage => _errorMessage;
 
+  RealtimeChannel? _realtimeChannel;
+
   Future<void> loadCourts(String venueId) async {
     _isLoading = true;
     _errorMessage = null;
     notifyListeners();
     try {
       _courts = await getCourtsUseCase(venueId);
+      // Đồng bộ biểu giá thực tế từ Supabase vào CourtPricingService
+      for (final c in _courts) {
+        CourtPricingService.instance.registerCourtPricing(
+          courtId: c.id,
+          normalPrice: c.pricePerHour,
+          peakPrice: c.peakPrice,
+          applyPeak: c.applyPeak,
+          weekendSurcharge: c.weekendSurcharge,
+          applyWeekend: c.applyWeekend,
+        );
+      }
     } catch (e) {
       _errorMessage = e.toString();
     } finally {
       _isLoading = false;
       notifyListeners();
     }
+  }
+
+  /// Đăng ký Realtime channel để cập nhật các ô giữ chỗ và đặt chỗ ngay lập tức
+  void subscribeToCourtRealtime(String venueId, String date) {
+    _realtimeChannel?.unsubscribe();
+    try {
+      _realtimeChannel = Supabase.instance.client
+          .channel('public:court_locks_and_slots:$venueId:$date')
+          .onPostgresChanges(
+            event: PostgresChangeEvent.all,
+            schema: 'public',
+            table: 'court_locks',
+            callback: (payload) {
+              loadActiveLocks(venueId, date);
+            },
+          )
+          .onPostgresChanges(
+            event: PostgresChangeEvent.all,
+            schema: 'public',
+            table: 'booking_slots',
+            callback: (payload) {
+              loadBookedSlots(venueId, date);
+            },
+          )
+          .subscribe();
+    } catch (e) {
+      debugPrint("Realtime subscription error in BookingProvider: $e");
+    }
+  }
+
+  void unsubscribeRealtime() {
+    _realtimeChannel?.unsubscribe();
+    _realtimeChannel = null;
+  }
+
+  @override
+  void dispose() {
+    _realtimeChannel?.unsubscribe();
+    super.dispose();
   }
 
   Future<void> loadActiveLocks(String venueId, String date) async {
@@ -129,12 +183,14 @@ class BookingProvider extends ChangeNotifier {
     required int slotIndex,
     required String date,
     required String userId,
+    String? lockToken,
   }) async {
     final success = await holdSlotUseCase(
       courtId: courtId,
       slotIndex: slotIndex,
       date: date,
       userId: userId,
+      lockToken: lockToken,
     );
     if (success) {
       await loadActiveLocks(venueId, date);
@@ -148,12 +204,14 @@ class BookingProvider extends ChangeNotifier {
     required int slotIndex,
     required String date,
     required String userId,
+    String? lockToken,
   }) async {
     await releaseSlotUseCase(
       courtId: courtId,
       slotIndex: slotIndex,
       date: date,
       userId: userId,
+      lockToken: lockToken,
     );
     await loadActiveLocks(venueId, date);
   }
@@ -162,8 +220,9 @@ class BookingProvider extends ChangeNotifier {
     required String venueId,
     required String date,
     required String userId,
+    String? lockToken,
   }) async {
-    await releaseSlotUseCase.releaseAll(userId);
+    await releaseSlotUseCase.releaseAll(userId, lockToken: lockToken);
     await loadActiveLocks(venueId, date);
   }
 

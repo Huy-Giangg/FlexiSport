@@ -12,6 +12,7 @@ import 'package:flexisport_app/features/customer/sports_complex/domain/entities/
 import 'package:flexisport_app/features/customer/sports_complex/data/models/sports_complex_model.dart';
 import 'package:flexisport_app/features/customer/sports_complex/presentation/providers/sports_complex_provider.dart';
 import 'package:flexisport_app/features/customer/payment/presentation/page/payment_info_page.dart';
+import 'package:flexisport_app/core/services/session_service.dart';
 
 // Trạng thái của từng ô thời gian
 enum SlotStatus { empty, booked, locked, event }
@@ -125,6 +126,7 @@ class _VisualBookingPageState extends State<VisualBookingPage> {
   // Lưu trữ danh sách các ô giờ đang được người dùng chọn
   // Lưu dưới dạng chuỗi: "courtId_slotIndex"
   final Set<String> _selectedSlots = {};
+  String _guestToken = '';
 
   late BookingProvider _bookingProvider;
 
@@ -141,9 +143,17 @@ class _VisualBookingPageState extends State<VisualBookingPage> {
     super.initState();
     // Lấy thông tin UID từ Supabase, dự phòng guest_user
     _userId = Supabase.instance.client.auth.currentUser?.id ?? 'guest_user';
+    SessionService.instance.getGuestSessionToken().then((token) {
+      if (mounted) {
+        setState(() {
+          _guestToken = token;
+        });
+      }
+    });
     _loadVenueData();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final provider = context.read<BookingProvider>();
+      provider.subscribeToCourtRealtime(widget.venueId, _formattedQueryDate);
       provider.loadCourts(widget.venueId).then((_) {
         provider.loadActiveLocks(widget.venueId, _formattedQueryDate);
         provider.loadBookedSlots(widget.venueId, _formattedQueryDate);
@@ -181,11 +191,13 @@ class _VisualBookingPageState extends State<VisualBookingPage> {
 
   @override
   void dispose() {
+    _bookingProvider.unsubscribeRealtime();
     if (_selectedSlots.isNotEmpty) {
       _bookingProvider.releaseAllUserLocks(
         venueId: widget.venueId,
         date: _formattedQueryDate,
         userId: _userId,
+        lockToken: _guestToken,
       );
     }
     super.dispose();
@@ -270,6 +282,7 @@ class _VisualBookingPageState extends State<VisualBookingPage> {
         date: _selectedDate,
         openTime: openTime,
         fallbackBasePrice: court.pricePerHour,
+        court: court,
       );
     }
     return total;
@@ -297,6 +310,7 @@ class _VisualBookingPageState extends State<VisualBookingPage> {
         slotIndex: slotIndex,
         date: _formattedQueryDate,
         userId: _userId,
+        lockToken: _guestToken,
       );
       return;
     }
@@ -350,17 +364,31 @@ class _VisualBookingPageState extends State<VisualBookingPage> {
       return;
     }
 
-    // 5. Chọn mới ô này thành công -> Cập nhật UI và giữ chỗ tức thì trong DB
-    setState(() {
-      _selectedSlots.add(slotKey);
-    });
+    // 5. Chọn mới ô này: Kiểm tra & Giữ chỗ tức thì trong DB trước khi cho vào giỏ
     bookingProvider.holdCourtSlot(
       venueId: widget.venueId,
       courtId: courtId,
       slotIndex: slotIndex,
       date: _formattedQueryDate,
       userId: _userId,
-    );
+      lockToken: _guestToken,
+    ).then((success) {
+      if (!mounted) return;
+      if (success) {
+        setState(() {
+          _selectedSlots.add(slotKey);
+        });
+      } else {
+        ScaffoldMessenger.of(context).hideCurrentSnackBar();
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text("Khung giờ này vừa có người giữ chỗ hoặc đã được đặt trước! Vui lòng chọn ô khác."),
+            backgroundColor: Colors.redAccent,
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
+    });
   }
 
   List<SelectedSlotDetail> _buildSelectedSlotDetails(List<CourtEntity> courts, List<String> timeLabels, String openTime) {
@@ -436,6 +464,7 @@ class _VisualBookingPageState extends State<VisualBookingPage> {
             date: _selectedDate,
             openTime: openTime,
             fallbackBasePrice: court.pricePerHour,
+            court: court,
           );
         }
 
@@ -619,6 +648,7 @@ class _VisualBookingPageState extends State<VisualBookingPage> {
                         });
                         // Load lại các khóa giữ chỗ, các sân đã đặt, sân bị khóa và sự kiện cho ngày mới
                         final provider = context.read<BookingProvider>();
+                        provider.subscribeToCourtRealtime(widget.venueId, _formattedQueryDate);
                         provider.loadActiveLocks(widget.venueId, _formattedQueryDate);
                         provider.loadBookedSlots(widget.venueId, _formattedQueryDate);
                         provider.loadCourtBlocks(widget.venueId, _formattedQueryDate);
@@ -1101,12 +1131,28 @@ class _VisualBookingPageState extends State<VisualBookingPage> {
                     onPressed: hasSelection
                         ? () {
                             final slotDetails = _buildSelectedSlotDetails(courts, timeLabels, venue.open_time);
+
+                            final List<Map<String, dynamic>> rawSlots = [];
+                            for (final key in _selectedSlots) {
+                              final lastUnderscore = key.lastIndexOf('_');
+                              if (lastUnderscore == -1) continue;
+                              final cId = key.substring(0, lastUnderscore);
+                              final sIdx = int.tryParse(key.substring(lastUnderscore + 1)) ?? 0;
+                              rawSlots.add({
+                                'court_id': cId,
+                                'slot_index': sIdx,
+                                'booking_date': _formattedQueryDate,
+                              });
+                            }
+
                             final args = PaymentInfoArgs(
                               venue: venue,
                               date: _formatDateVN(_selectedDate),
                               selectedSlots: slotDetails,
                               totalAmount: totalAmount,
                               totalHours: totalHours,
+                              rawSlots: rawSlots,
+                              lockToken: _guestToken,
                             );
                             context.push('/paymentinfopage', extra: args);
                           }

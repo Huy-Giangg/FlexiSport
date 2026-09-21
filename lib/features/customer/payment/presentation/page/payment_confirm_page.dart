@@ -8,6 +8,8 @@ import 'package:flexisport_app/features/customer/payment/presentation/page/payme
 import 'package:flexisport_app/features/customer/payment/data/datasources/payment_remote_datasource.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flexisport_app/core/services/session_service.dart';
+import 'package:flexisport_app/features/customer/booking/data/datasources/booking_remote_datasource.dart';
 
 class PaymentConfirmArgs {
   final PaymentInfoArgs infoArgs;
@@ -37,7 +39,7 @@ class _PaymentConfirmPageState extends State<PaymentConfirmPage> {
   Timer? _countdownTimer;
   StreamSubscription? _realtimeSubscription;
   
-  int _secondsRemaining = 300; // 5 minutes payment limit
+  int _secondsRemaining = 600; // 10 minutes payment limit
   String _userId = '';
   
   bool _isLoading = true;
@@ -97,34 +99,55 @@ class _PaymentConfirmPageState extends State<PaymentConfirmPage> {
         queryDate = dateStr;
       }
 
-      // 1. Get temporary locked slots from court_locks
-      final locksResponse = await Supabase.instance.client
-          .from('court_locks')
-          .select('court_id, slot_index, booking_date')
-          .eq('user_id', _userId)
-          .eq('booking_date', queryDate);
+      // 1. Lấy danh sách slots đặt: Ưu tiên rawSlots truyền từ visual_booking_page
+      final List<Map<String, dynamic>> slotsToInsert = [];
+      if (widget.args.infoArgs.rawSlots.isNotEmpty) {
+        slotsToInsert.addAll(widget.args.infoArgs.rawSlots);
+      } else {
+        var query = Supabase.instance.client
+            .from('court_locks')
+            .select('court_id, slot_index, booking_date')
+            .eq('booking_date', queryDate);
 
-      final List locks = locksResponse as List? ?? [];
-      if (locks.isEmpty) {
+        final authUser = Supabase.instance.client.auth.currentUser;
+        if (authUser != null) {
+          query = query.eq('user_id', authUser.id);
+        } else if (widget.args.infoArgs.lockToken != null && widget.args.infoArgs.lockToken!.isNotEmpty) {
+          query = query.eq('lock_token', widget.args.infoArgs.lockToken!);
+        }
+
+        final locksResponse = await query;
+        final List locks = locksResponse as List? ?? [];
+        for (final lock in locks) {
+          slotsToInsert.add({
+            'court_id': lock['court_id'],
+            'booking_date': lock['booking_date'],
+            'slot_index': lock['slot_index'],
+          });
+        }
+      }
+
+      if (slotsToInsert.isEmpty) {
         throw Exception('Không tìm thấy thông tin giữ chỗ (phiên giữ chỗ có thể đã hết hạn).');
       }
 
-      final List<Map<String, dynamic>> slotsToInsert = locks.map((lock) {
-        return {
-          'court_id': lock['court_id'],
-          'booking_date': lock['booking_date'],
-          'slot_index': lock['slot_index'],
-        };
-      }).toList();
+      // 2. Gia hạn thời gian giữ chỗ lên 10 phút để người dùng yên tâm quét QR không bị cướp slot
+      final bookingDatasource = BookingRemoteDatasource(Supabase.instance.client);
+      await bookingDatasource.extendCourtLocks(
+        slots: slotsToInsert,
+        lockToken: widget.args.infoArgs.lockToken,
+        durationMinutes: 10,
+      );
 
-      // 2. Call RPC to create database transaction
+      // 3. Gọi RPC tạo giao dịch đặt sân nguyên tử
       final result = await _paymentDatasource.createBookingTransaction(
-        userId: _userId,
+        userId: _userId == 'guest_user' ? null : _userId,
         totalAmount: widget.args.infoArgs.totalAmount,
         name: widget.args.name,
         phone: widget.args.phone,
         note: widget.args.note,
         slots: slotsToInsert,
+        lockToken: widget.args.infoArgs.lockToken,
       );
 
       // Save guest booking ID locally if applicable
@@ -282,6 +305,7 @@ class _PaymentConfirmPageState extends State<PaymentConfirmPage> {
             venueId: widget.args.infoArgs.venue.id,
             date: queryDate,
             userId: _userId,
+            lockToken: widget.args.infoArgs.lockToken,
           );
       context.pushReplacement("/PaymentCancelPage");
     }
