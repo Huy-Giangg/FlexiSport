@@ -248,9 +248,16 @@ class _BookedCourtPageState extends State<BookedCourtPage> {
 
   String _formatDate(String dateStr) {
     try {
-      final parts = dateStr.split('-');
+      final clean = dateStr.split('T')[0].split(' ')[0].trim();
+      final parts = clean.split('-');
       if (parts.length == 3) {
         return "${parts[2]}/${parts[1]}/${parts[0]}";
+      }
+      final parsed = DateTime.tryParse(dateStr);
+      if (parsed != null) {
+        final d = parsed.day.toString().padLeft(2, '0');
+        final m = parsed.month.toString().padLeft(2, '0');
+        return "$d/$m/${parsed.year}";
       }
     } catch (_) {}
     return dateStr;
@@ -823,263 +830,556 @@ class _BookedCourtPageState extends State<BookedCourtPage> {
       statusColor = Colors.blueGrey;
     }
 
-    return Card(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      elevation: 2,
-      margin: const EdgeInsets.symmetric(vertical: 8),
-      color: Colors.white,
-      child: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFFCE9FC),
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: const Color(0xFFB313B2), width: 0.5),
-                  ),
-                  child: const Text(
-                    "VÉ SỰ KIỆN",
-                    style: TextStyle(
-                      color: Color(0xFFB313B2),
-                      fontSize: 12,
-                      fontWeight: FontWeight.bold,
+    return InkWell(
+      borderRadius: BorderRadius.circular(16),
+      onTap: () => _showEventTicketDetailDialog(context, booking),
+      child: Card(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        elevation: 2,
+        margin: const EdgeInsets.symmetric(vertical: 8),
+        color: Colors.white,
+        child: Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFCE9FC),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: const Color(0xFFB313B2), width: 0.5),
+                    ),
+                    child: const Text(
+                      "VÉ SỰ KIỆN",
+                      style: TextStyle(
+                        color: Color(0xFFB313B2),
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                   ),
-                ),
-                Text(
-                  statusText,
-                  style: TextStyle(color: statusColor, fontWeight: FontWeight.bold, fontSize: 14),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            Text(
-              title,
-              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.black87),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              "Vị trí: $courtName",
-              style: const TextStyle(fontSize: 14, color: Colors.black54),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              "Thời gian: $startTime - $endTime | Ngày: $dateStr",
-              style: const TextStyle(fontSize: 14, color: Colors.black54),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              "Số lượng: ${booking.ticketCount} vé",
-              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.black87),
-            ),
-            const Divider(height: 24),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text("Tổng thanh toán", style: TextStyle(color: Colors.black54, fontSize: 12)),
-                    const SizedBox(height: 2),
-                    Text(
-                      _formatVND(booking.totalAmount),
-                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Color(0xFF006D38)),
-                    ),
-                  ],
-                ),
-                ElevatedButton.icon(
-                  onPressed: () => _showQRTicketDialog(context, booking),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF006D38),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  Text(
+                    statusText,
+                    style: TextStyle(color: statusColor, fontWeight: FontWeight.bold, fontSize: 14),
                   ),
-                  icon: const Icon(Icons.qr_code_2_rounded, size: 18, color: Colors.white),
-                  label: const Text("XEM VÉ QR", style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold)),
-                ),
-              ],
-            ),
-          ],
+                ],
+              ),
+              const SizedBox(height: 12),
+              Text(
+                title,
+                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.black87),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                "Vị trí: $courtName",
+                style: const TextStyle(fontSize: 14, color: Colors.black54),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                "Thời gian: $startTime - $endTime | Ngày: $dateStr",
+                style: const TextStyle(fontSize: 14, color: Colors.black54),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                "Số lượng: ${booking.ticketCount} vé",
+                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.black87),
+              ),
+              const Divider(height: 24),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text("Tổng thanh toán", style: TextStyle(color: Colors.black54, fontSize: 12)),
+                      const SizedBox(height: 2),
+                      Text(
+                        _formatVND(booking.totalAmount),
+                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Color(0xFF006D38)),
+                      ),
+                    ],
+                  ),
+                  ElevatedButton.icon(
+                    onPressed: () => _showEventTicketDetailDialog(context, booking),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF006D38),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                    ),
+                    icon: const Icon(Icons.receipt_long_rounded, size: 18, color: Colors.white),
+                    label: const Text("XEM CHI TIẾT", style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold)),
+                  ),
+                ],
+              ),
+            ],
+          ),
         ),
       ),
     );
   }
 
-  void _showQRTicketDialog(BuildContext context, EventBookingEntity booking) {
+  void _showEventTicketDetailDialog(BuildContext pageContext, EventBookingEntity booking) {
     final event = booking.event;
     final title = event?.title ?? 'Sự kiện ghép sân';
-    final courtName = event?.courtName ?? 'Sân 1';
+    final courtName = event?.courtName ?? 'Sân thi đấu';
     final startTime = event?.startTime ?? '15:00';
     final endTime = event?.endTime ?? '18:00';
     final dateStr = event != null ? _formatDate(event.eventDate) : _formatDate(booking.createdAt);
+    final scaffoldMessenger = ScaffoldMessenger.of(pageContext);
+    final bookingProvider = pageContext.read<BookingProvider>();
+
+    String? transactionCode;
+    String cleanNote = '';
+    if (booking.note != null && booking.note!.trim().isNotEmpty) {
+      final match = RegExp(r'\[?Mã GD:\s*([A-Za-z0-9_]+)\]?').firstMatch(booking.note!);
+      if (match != null) {
+        transactionCode = match.group(1);
+        cleanNote = booking.note!.replaceAll(match.group(0)!, '').trim();
+      } else {
+        cleanNote = booking.note!.trim();
+      }
+    }
     
     showDialog(
-      context: context,
-      builder: (BuildContext context) {
+      context: pageContext,
+      builder: (BuildContext dialogContext) {
         return StatefulBuilder(
-          builder: (context, setDialogState) {
+          builder: (dialogContext, setDialogState) {
             String statusText = 'Chờ xác nhận';
-            Color statusColor = const Color(0xFFE2A62C);
+            Color statusBgColor = const Color(0xFFFFF3CD);
+            Color statusTextColor = const Color(0xFF856404);
             if (booking.status == 'completed') {
-              statusText = 'Đã thanh toán (Chưa sử dụng)';
-              statusColor = const Color(0xFF1EC391);
+              statusText = 'ĐÃ THANH TOÁN';
+              statusBgColor = const Color(0xFFD4EDDA);
+              statusTextColor = const Color(0xFF155724);
             } else if (booking.status == 'cancelled') {
-              statusText = 'Đã huỷ';
-              statusColor = Colors.redAccent;
+              statusText = 'ĐÃ HỦY';
+              statusBgColor = const Color(0xFFF8D7DA);
+              statusTextColor = const Color(0xFF721C24);
             } else if (booking.status == 'used') {
-              statusText = 'Đã sử dụng (Đã check-in)';
-              statusColor = Colors.grey;
+              statusText = 'ĐÃ CHECK-IN';
+              statusBgColor = const Color(0xFFE2E3E5);
+              statusTextColor = const Color(0xFF383D41);
             }
 
-            return AlertDialog(
-              backgroundColor: const Color(0xFF005F31),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-              contentPadding: const EdgeInsets.all(16),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Align(
-                    alignment: Alignment.centerRight,
-                    child: IconButton(
-                      icon: const Icon(Icons.close, color: Colors.white70),
-                      onPressed: () => Navigator.of(context).pop(),
+            return Dialog(
+              backgroundColor: Colors.transparent,
+              insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+              child: Container(
+                constraints: const BoxConstraints(maxWidth: 420),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(20),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.2),
+                      blurRadius: 16,
+                      offset: const Offset(0, 8),
                     ),
-                  ),
-                  Text(
-                    title,
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(
-                      color: Color(0xFFFFEC88),
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    "$courtName | $startTime - $endTime",
-                    style: const TextStyle(color: Colors.white70, fontSize: 14),
-                  ),
-                  Text(
-                    "Ngày diễn ra: $dateStr",
-                    style: const TextStyle(color: Colors.white70, fontSize: 14),
-                  ),
-                  const SizedBox(height: 16),
-                  
-                  // QR Code image
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    child: Image.network(
-                      "https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${booking.id}",
-                      width: 180,
-                      height: 180,
-                      fit: BoxFit.contain,
-                      loadingBuilder: (context, child, loadingProgress) {
-                        if (loadingProgress == null) return child;
-                        return const SizedBox(
-                          width: 180,
-                          height: 180,
-                          child: Center(
-                            child: CircularProgressIndicator(color: Color(0xFF006D38)),
-                          ),
-                        );
-                      },
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  
-                  Text(
-                    "Trạng thái: $statusText",
-                    style: TextStyle(color: statusColor, fontWeight: FontWeight.bold, fontSize: 14),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    "Mã đặt vé: ${booking.id.substring(0, 8).toUpperCase()}",
-                    style: const TextStyle(color: Colors.white54, fontSize: 12),
-                  ),
-                  Text(
-                    "Khách hàng: ${booking.customerName} (${booking.customerPhone})",
-                    style: const TextStyle(color: Colors.white70, fontSize: 13),
-                  ),
-                  Text(
-                    "Số lượng: ${booking.ticketCount} vé",
-                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
-                  ),
-                  
-                  const Divider(color: Colors.white24, height: 24),
-                  
-                  if (booking.status == 'completed' || booking.status == 'pending') ...[
-                    SizedBox(
-                      width: double.infinity,
-                      height: 44,
-                      child: ElevatedButton.icon(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.orangeAccent,
-                          foregroundColor: Colors.black,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                        ),
-                        onPressed: () async {
-                          Navigator.of(context).pop(); // Close dialog
-                          
-                          final prefs = await SharedPreferences.getInstance();
-                          final guestBookingIds = prefs.getStringList('guest_event_booking_ids') ?? [];
-                          
-                          await context.read<BookingProvider>().updateEventBookingStatus(
-                            bookingId: booking.id,
-                            status: 'used',
-                            userId: _userId,
-                            guestIds: guestBookingIds,
-                          );
-                          
-                          _loadEventBookings();
-                          
-                          if (context.mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text("Mô phỏng quét vé check-in thành công!"),
-                                backgroundColor: Color(0xFF1EC391),
-                              ),
-                            );
-                          }
-                        },
-                        icon: const Icon(Icons.qr_code_scanner_rounded),
-                        label: const Text(
-                          "MÔ PHỎNG XÉ VÉ (CHECK-IN)",
-                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
-                        ),
-                      ),
-                    ),
-                  ] else if (booking.status == 'used') ...[
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                      decoration: BoxDecoration(
-                        color: Colors.white24,
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: const Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(Icons.check_circle, color: Colors.grey),
-                          SizedBox(width: 8),
-                          Text("VÉ ĐÃ ĐƯỢC SỬ DỤNG", style: TextStyle(color: Colors.white70, fontWeight: FontWeight.bold)),
-                        ],
-                      ),
-                    )
                   ],
-                ],
+                ),
+                clipBehavior: Clip.antiAlias,
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      // Header Banner
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.fromLTRB(16, 16, 16, 14),
+                        decoration: const BoxDecoration(
+                          color: Color(0xFF006D38),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFFFFEC88).withValues(alpha: 0.2),
+                                    borderRadius: BorderRadius.circular(6),
+                                    border: Border.all(color: const Color(0xFFFFEC88), width: 0.8),
+                                  ),
+                                  child: const Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(Icons.confirmation_number_outlined, size: 12, color: Color(0xFFFFEC88)),
+                                      SizedBox(width: 4),
+                                      Text(
+                                        "VÉ SỰ KIỆN",
+                                        style: TextStyle(
+                                          color: Color(0xFFFFEC88),
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.bold,
+                                          letterSpacing: 0.5,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                  decoration: BoxDecoration(
+                                    color: statusBgColor,
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  child: Text(
+                                    statusText,
+                                    style: TextStyle(
+                                      color: statusTextColor,
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 10.5,
+                                    ),
+                                  ),
+                                ),
+                                InkWell(
+                                  onTap: () => Navigator.of(dialogContext).pop(),
+                                  borderRadius: BorderRadius.circular(20),
+                                  child: Container(
+                                    padding: const EdgeInsets.all(4),
+                                    decoration: BoxDecoration(
+                                      color: Colors.white.withValues(alpha: 0.15),
+                                      shape: BoxShape.circle,
+                                    ),
+                                    child: const Icon(Icons.close_rounded, size: 18, color: Colors.white),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 12),
+                            Text(
+                              title,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                                height: 1.3,
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+                            Row(
+                              children: [
+                                const Icon(Icons.location_on_rounded, size: 14, color: Color(0xFFFFEC88)),
+                                const SizedBox(width: 4),
+                                Expanded(
+                                  child: Text(
+                                    courtName,
+                                    style: const TextStyle(
+                                      color: Color(0xFFFFEC88),
+                                      fontSize: 12.5,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+
+                      // Ticket Body
+                      Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            // 1. Schedule Box
+                            Container(
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFF6FAF7),
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(color: const Color(0xFFE2EFE7)),
+                              ),
+                              child: Column(
+                                children: [
+                                  Row(
+                                    children: [
+                                      Expanded(
+                                        child: Row(
+                                          children: [
+                                            Container(
+                                              padding: const EdgeInsets.all(6),
+                                              decoration: BoxDecoration(
+                                                color: const Color(0xFF006D38).withValues(alpha: 0.1),
+                                                borderRadius: BorderRadius.circular(8),
+                                              ),
+                                              child: const Icon(Icons.calendar_month_rounded, size: 16, color: Color(0xFF006D38)),
+                                            ),
+                                            const SizedBox(width: 8),
+                                            Expanded(
+                                              child: Column(
+                                                crossAxisAlignment: CrossAxisAlignment.start,
+                                                children: [
+                                                  const Text(
+                                                    "NGÀY DIỄN RA",
+                                                    style: TextStyle(fontSize: 10, color: Colors.grey, fontWeight: FontWeight.bold),
+                                                  ),
+                                                  const SizedBox(height: 2),
+                                                  Text(
+                                                    dateStr,
+                                                    style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.black87),
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                      Container(width: 1, height: 32, color: const Color(0xFFE2EFE7)),
+                                      const SizedBox(width: 12),
+                                      Expanded(
+                                        child: Row(
+                                          children: [
+                                            Container(
+                                              padding: const EdgeInsets.all(6),
+                                              decoration: BoxDecoration(
+                                                color: const Color(0xFF006D38).withValues(alpha: 0.1),
+                                                borderRadius: BorderRadius.circular(8),
+                                              ),
+                                              child: const Icon(Icons.access_time_rounded, size: 16, color: Color(0xFF006D38)),
+                                            ),
+                                            const SizedBox(width: 8),
+                                            Expanded(
+                                              child: Column(
+                                                crossAxisAlignment: CrossAxisAlignment.start,
+                                                children: [
+                                                  const Text(
+                                                    "KHUNG GIỜ",
+                                                    style: TextStyle(fontSize: 10, color: Colors.grey, fontWeight: FontWeight.bold),
+                                                  ),
+                                                  const SizedBox(height: 2),
+                                                  Text(
+                                                    "$startTime - $endTime",
+                                                    style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.black87),
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  if (event != null) ...[
+                                    const SizedBox(height: 10),
+                                    Container(
+                                      width: double.infinity,
+                                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                      decoration: BoxDecoration(
+                                        color: Colors.white,
+                                        borderRadius: BorderRadius.circular(8),
+                                        border: Border.all(color: const Color(0xFFD6EADA)),
+                                      ),
+                                      child: Row(
+                                        children: [
+                                          const Icon(Icons.sports_tennis_rounded, size: 15, color: Color(0xFF006D38)),
+                                          const SizedBox(width: 6),
+                                          Expanded(
+                                            child: Text(
+                                              "${event.sportType}  •  ${event.level}",
+                                              style: const TextStyle(
+                                                fontSize: 12.5,
+                                                fontWeight: FontWeight.bold,
+                                                color: Color(0xFF006D38),
+                                              ),
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+                                ],
+                              ),
+                            ),
+                            const SizedBox(height: 14),
+
+                            // 2. Customer & Ticket Details
+                            _buildEventDetailRow("Khách hàng", booking.customerName),
+                            _buildEventDetailRow("Số điện thoại", booking.customerPhone),
+                            _buildEventDetailRow("Số lượng vé", "${booking.ticketCount} vé", isBold: true),
+                            _buildEventDetailRow(
+                              "Mã đặt vé",
+                              "#${booking.id.substring(0, 8).toUpperCase()}",
+                              valueColor: const Color(0xFF006D38),
+                              isBold: true,
+                            ),
+                            if (transactionCode != null && transactionCode.isNotEmpty)
+                              _buildEventDetailRow(
+                                "Mã giao dịch",
+                                transactionCode,
+                                valueColor: Colors.deepOrange,
+                                isBold: true,
+                              ),
+                            if (cleanNote.isNotEmpty)
+                              _buildEventDetailRow("Ghi chú", cleanNote),
+
+                            // 3. Payment Box
+                            Container(
+                              margin: const EdgeInsets.symmetric(vertical: 10),
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFF1F8F4),
+                                borderRadius: BorderRadius.circular(10),
+                                border: Border.all(color: const Color(0xFFD3E7DC)),
+                              ),
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                children: [
+                                  const Text(
+                                    "Tổng thanh toán",
+                                    style: TextStyle(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w500,
+                                      color: Colors.black54,
+                                    ),
+                                  ),
+                                  Text(
+                                    _formatVND(booking.totalAmount),
+                                    style: const TextStyle(
+                                      fontSize: 17,
+                                      fontWeight: FontWeight.bold,
+                                      color: Color(0xFF006D38),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+
+                            // 4. Notice
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFFFF9E6),
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(color: const Color(0xFFFFE082)),
+                              ),
+                              child: const Row(
+                                children: [
+                                  Icon(Icons.verified_outlined, size: 16, color: Color(0xFFC78500)),
+                                  SizedBox(width: 8),
+                                  Expanded(
+                                    child: Text(
+                                      "Xuất trình thông tin vé này cho chủ sân khi đến tham gia",
+                                      style: TextStyle(
+                                        fontSize: 11.5,
+                                        color: Color(0xFF8A5B00),
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(height: 16),
+
+                            // 5. Actions
+                            if (booking.status == 'completed' || booking.status == 'pending') ...[
+                              SizedBox(
+                                width: double.infinity,
+                                height: 44,
+                                child: ElevatedButton.icon(
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: const Color(0xFF006D38),
+                                    foregroundColor: Colors.white,
+                                    elevation: 0,
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                  ),
+                                  onPressed: () async {
+                                    Navigator.of(dialogContext).pop();
+                                    final prefs = await SharedPreferences.getInstance();
+                                    final guestBookingIds = prefs.getStringList('guest_event_booking_ids') ?? [];
+                                    await bookingProvider.updateEventBookingStatus(
+                                      bookingId: booking.id,
+                                      status: 'used',
+                                      userId: _userId,
+                                      guestIds: guestBookingIds,
+                                    );
+                                    _loadEventBookings();
+                                    if (!mounted) return;
+                                    scaffoldMessenger.showSnackBar(
+                                      const SnackBar(
+                                        content: Text("Đã xác nhận check-in thành công!"),
+                                        backgroundColor: Color(0xFF1EC391),
+                                      ),
+                                    );
+                                  },
+                                  icon: const Icon(Icons.check_circle_outline_rounded, size: 18),
+                                  label: const Text(
+                                    "XÁC NHẬN ĐẾN SÂN (CHECK-IN)",
+                                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                                  ),
+                                ),
+                              ),
+                            ] else ...[
+                              SizedBox(
+                                width: double.infinity,
+                                height: 44,
+                                child: OutlinedButton(
+                                  style: OutlinedButton.styleFrom(
+                                    foregroundColor: Colors.black87,
+                                    side: BorderSide(color: Colors.grey.shade300),
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                  ),
+                                  onPressed: () => Navigator.of(dialogContext).pop(),
+                                  child: const Text("ĐÓNG", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               ),
             );
           },
         );
       },
+    );
+  }
+
+  Widget _buildEventDetailRow(String label, String value, {Color? valueColor, bool isBold = false}) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 100,
+            child: Text(
+              label,
+              style: const TextStyle(
+                fontSize: 13,
+                color: Colors.black54,
+              ),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              value,
+              textAlign: TextAlign.end,
+              style: TextStyle(
+                fontSize: 13,
+                color: valueColor ?? Colors.black87,
+                fontWeight: isBold ? FontWeight.bold : FontWeight.w500,
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -1285,7 +1585,7 @@ class _BookedCourtPageState extends State<BookedCourtPage> {
                     mainPageProvider.showNavbar();
                   });
                 } else {
-                  context.push("/CreateMatchmakingPage", extra: bookingIdStr).then((_) {
+                  context.push("/CreateMatchmakingPage", extra: bookingMap).then((_) {
                     _loadBookings();
                   });
                 }

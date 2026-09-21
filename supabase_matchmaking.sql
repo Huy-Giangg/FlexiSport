@@ -67,7 +67,7 @@ BEGIN
     SET slots_available = slots_available - 1,
         status = CASE WHEN slots_available - 1 = 0 THEN 'full' ELSE 'open' END
     WHERE id = NEW.post_id;
-  ELSIF NEW.status = 'cancelled' AND OLD.status = 'approved' THEN
+  ELSIF NEW.status = 'cancelled' AND (OLD.status = 'approved' OR OLD.status = 'cancel_requested') THEN
     UPDATE matchmaking_posts
     SET slots_available = slots_available + 1,
         status = 'open'

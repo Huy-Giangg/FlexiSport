@@ -752,7 +752,9 @@ class _DiscoverPageState extends State<DiscoverPage> {
                               style: GoogleFonts.lexend(fontSize: 10, color: Colors.grey.shade500),
                             ),
                             Text(
-                              _formatVND(event.ticketPrice),
+                              event.ticketPrice == 0
+                                  ? "Miễn phí"
+                                  : "${_formatVND(event.ticketPrice)}/vé",
                               style: GoogleFonts.lexend(
                                 fontSize: 16,
                                 fontWeight: FontWeight.bold,

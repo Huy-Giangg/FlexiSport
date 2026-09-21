@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:flexisport_app/core/theme/app_colors.dart';
@@ -63,7 +64,7 @@ class _AddEditEventSheetState extends State<AddEditEventSheet> {
   String _selectedLevel = 'Mọi trình độ';
   String _selectedCourtName = '';
   String? _selectedCourtId;
-  DateTime _selectedDate = DateTime.now().add(const Duration(days: 1));
+  DateTime _selectedDate = DateTime.now().add(const Duration(days: 2));
   TimeOfDay _startTime = const TimeOfDay(hour: 15, minute: 0);
   TimeOfDay _endTime = const TimeOfDay(hour: 18, minute: 0);
 
@@ -127,8 +128,10 @@ class _AddEditEventSheetState extends State<AddEditEventSheet> {
       _startTime = _parseTime(e.startTime, defaultHour: 15);
       _endTime = _parseTime(e.endTime, defaultHour: 18);
     } else {
+      _selectedDate = DateTime.now().add(const Duration(days: 2));
       if (widget.courts.isNotEmpty) {
         _selectedCourtName = widget.courts.first.name;
+        _selectedCourtId = widget.courts.first.id;
       } else {
         _selectedCourtName = 'Sân 1';
       }
@@ -165,65 +168,157 @@ class _AddEditEventSheetState extends State<AddEditEventSheet> {
     super.dispose();
   }
 
-  Future<void> _pickImage() async {
-    final image = await _picker.pickImage(source: ImageSource.gallery, imageQuality: 85);
-    if (image != null) {
-      setState(() {
-        _selectedImage = image;
-      });
-    }
-  }
-
-  Future<void> _pickDate() async {
-    final now = DateTime.now();
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: _selectedDate.isBefore(now) ? now : _selectedDate,
-      firstDate: now,
-      lastDate: now.add(const Duration(days: 365)),
-      builder: (context, child) {
-        return Theme(
-          data: Theme.of(context).copyWith(
-            colorScheme: const ColorScheme.light(
-              primary: AppColors.primary,
-              onPrimary: Colors.white,
-            ),
+  Future<void> _pickImage(ImageSource source) async {
+    try {
+      final image = await _picker.pickImage(
+        source: source,
+        imageQuality: 85,
+        maxWidth: 1920,
+        maxHeight: 1080,
+      );
+      if (image != null) {
+        setState(() {
+          _selectedImage = image;
+        });
+      }
+    } catch (e) {
+      debugPrint("Lỗi chọn ảnh: $e");
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text("Không thể truy cập ảnh: $e"),
+            backgroundColor: Colors.red,
           ),
-          child: child!,
         );
-      },
-    );
-
-    if (picked != null) {
-      setState(() {
-        _selectedDate = picked;
-      });
+      }
     }
   }
 
-  Future<void> _pickStartTime() async {
-    final picked = await showTimePicker(
+  void _showImagePickerModal() {
+    showModalBottomSheet(
       context: context,
-      initialTime: _startTime,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 40,
+                height: 4,
+                margin: const EdgeInsets.only(bottom: 16),
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade300,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              Text(
+                "Tải ảnh sự kiện lên",
+                style: GoogleFonts.lexend(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: const Color(0xFF1E293B),
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                "Chọn phương thức để cập nhật hình ảnh sự kiện",
+                style: GoogleFonts.lexend(fontSize: 13, color: Colors.grey.shade600),
+              ),
+              const SizedBox(height: 20),
+              ListTile(
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                tileColor: const Color(0xFFF8FAFC),
+                leading: Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: AppColors.primary.withValues(alpha: 0.12),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.photo_library_rounded, color: AppColors.primary),
+                ),
+                title: Text(
+                  "Chọn từ Thư viện",
+                  style: GoogleFonts.lexend(fontSize: 15, fontWeight: FontWeight.w600),
+                ),
+                subtitle: Text(
+                  "Mở đầy đủ ảnh từ thư viện thiết bị để chọn",
+                  style: GoogleFonts.lexend(fontSize: 12, color: Colors.grey.shade600),
+                ),
+                trailing: const Icon(Icons.chevron_right_rounded, color: Colors.grey),
+                onTap: () {
+                  Navigator.of(ctx).pop();
+                  _pickImage(ImageSource.gallery);
+                },
+              ),
+              const SizedBox(height: 10),
+              ListTile(
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                tileColor: const Color(0xFFF8FAFC),
+                leading: Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF0288D1).withValues(alpha: 0.12),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.camera_alt_rounded, color: Color(0xFF0288D1)),
+                ),
+                title: Text(
+                  "Chụp ảnh mới",
+                  style: GoogleFonts.lexend(fontSize: 15, fontWeight: FontWeight.w600),
+                ),
+                subtitle: Text(
+                  "Sử dụng máy ảnh để chụp ảnh sự kiện ngay lập tức",
+                  style: GoogleFonts.lexend(fontSize: 12, color: Colors.grey.shade600),
+                ),
+                trailing: const Icon(Icons.chevron_right_rounded, color: Colors.grey),
+                onTap: () {
+                  Navigator.of(ctx).pop();
+                  _pickImage(ImageSource.camera);
+                },
+              ),
+              if (_selectedImage != null || (widget.event?.bannerUrl != null && widget.event!.bannerUrl!.isNotEmpty)) ...[
+                const SizedBox(height: 10),
+                ListTile(
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  tileColor: Colors.red.shade50.withValues(alpha: 0.5),
+                  leading: Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: Colors.red.withValues(alpha: 0.12),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(Icons.delete_outline_rounded, color: Colors.red),
+                  ),
+                  title: Text(
+                    "Xóa ảnh hiện tại",
+                    style: GoogleFonts.lexend(fontSize: 15, fontWeight: FontWeight.w600, color: Colors.red),
+                  ),
+                  subtitle: Text(
+                    "Gỡ bỏ ảnh bìa sự kiện đã chọn",
+                    style: GoogleFonts.lexend(fontSize: 12, color: Colors.grey.shade600),
+                  ),
+                  onTap: () {
+                    Navigator.of(ctx).pop();
+                    setState(() {
+                      _selectedImage = null;
+                      _bannerUrlController.clear();
+                    });
+                  },
+                ),
+              ],
+              const SizedBox(height: 12),
+            ],
+          ),
+        ),
+      ),
     );
-    if (picked != null) {
-      setState(() {
-        _startTime = picked;
-      });
-    }
   }
 
-  Future<void> _pickEndTime() async {
-    final picked = await showTimePicker(
-      context: context,
-      initialTime: _endTime,
-    );
-    if (picked != null) {
-      setState(() {
-        _endTime = picked;
-      });
-    }
-  }
 
   Future<void> _openVisualCourtPicker() async {
     final effectiveVenueId = widget.venueId.isNotEmpty
@@ -266,6 +361,29 @@ class _AddEditEventSheetState extends State<AddEditEventSheet> {
     final double price = double.tryParse(_priceController.text.trim()) ?? 0.0;
     final int maxTickets = int.tryParse(_maxTicketsController.text.trim()) ?? 10;
     final int minTickets = int.tryParse(_minTicketsController.text.trim()) ?? 2;
+
+    final minDate = DateTime.now().add(const Duration(days: 2));
+    final minDateMidnight = DateTime(minDate.year, minDate.month, minDate.day);
+    final selectedDateMidnight = DateTime(_selectedDate.year, _selectedDate.month, _selectedDate.day);
+    if (selectedDateMidnight.isBefore(minDateMidnight)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("Thời gian tổ chức sự kiện phải bắt đầu từ ít nhất 2 ngày sau hiện tại."),
+          backgroundColor: Colors.redAccent,
+        ),
+      );
+      return;
+    }
+
+    if (price < 50000 || price > 300000) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("Giá vé tham gia phải nằm trong khoảng từ 50.000đ đến 300.000đ/người."),
+          backgroundColor: Colors.redAccent,
+        ),
+      );
+      return;
+    }
 
     if (minTickets < 1) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -516,75 +634,161 @@ class _AddEditEventSheetState extends State<AddEditEventSheet> {
                         ),
                       ],
                     ),
-                    // NÚT CHỌN SÂN & GIỜ TRỰC QUAN
+
+                    const SizedBox(height: 16,),
+                    // LỊCH SÂN & GIỜ TRỰC QUAN
+                    _buildLabel("Lịch sân & Khung giờ tổ chức *"),
+                    const SizedBox(height: 8,),
                     InkWell(
                       onTap: _openVisualCourtPicker,
                       borderRadius: BorderRadius.circular(16),
                       child: Container(
-                        padding: const EdgeInsets.all(12),
+                        padding: const EdgeInsets.all(14),
                         decoration: BoxDecoration(
-                          gradient: const LinearGradient(
-                            colors: [Color(0xFFE0F2FE), Color(0xFFF0FDF4)],
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                          ),
+                          color: const Color(0xFFF8FAFC),
                           borderRadius: BorderRadius.circular(16),
-                          border: Border.all(color: const Color(0xFF0288D1).withOpacity(0.35), width: 1.2),
-                        ),
-                        child: Row(
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.all(10),
-                              decoration: BoxDecoration(
-                                color: const Color(0xFF0288D1),
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: const Icon(Icons.grid_view_rounded, color: Colors.white, size: 20),
+                          border: Border.all(color: const Color(0xFF0288D1).withOpacity(0.4), width: 1.5),
+                          boxShadow: [
+                            BoxShadow(
+                              color: const Color(0xFF0288D1).withOpacity(0.06),
+                              blurRadius: 10,
+                              offset: const Offset(0, 3),
                             ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Row(
+                          ],
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.all(10),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFF0288D1),
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  child: const Icon(Icons.grid_view_rounded, color: Colors.white, size: 20),
+                                ),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
                                     children: [
                                       Text(
-                                        "Xem lịch sân & Chọn giờ trống",
+                                        "Xem lịch & Chọn giờ trống",
                                         style: GoogleFonts.lexend(
                                           fontWeight: FontWeight.bold,
                                           fontSize: 13,
                                           color: AppColors.onBackground,
                                         ),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
                                       ),
-                                      const SizedBox(width: 6),
-                                      Container(
-                                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                        decoration: BoxDecoration(
-                                          color: const Color(0xFF2E7D32),
-                                          borderRadius: BorderRadius.circular(6),
+                                      const SizedBox(height: 2),
+                                      Text(
+                                        "Bắt đầu từ 2 ngày sau • Lưới 30 phút",
+                                        style: GoogleFonts.lexend(
+                                          fontSize: 11,
+                                          color: Colors.grey.shade600,
                                         ),
-                                        child: Text(
-                                          "Trực quan",
-                                          style: GoogleFonts.lexend(fontSize: 9, color: Colors.white, fontWeight: FontWeight.bold),
-                                        ),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
                                       ),
                                     ],
                                   ),
-                                  const SizedBox(height: 3),
-                                  Text(
-                                    "Đang chọn: $_selectedCourtName • ${_selectedDate.day}/${_selectedDate.month} • ${_formatTimeOfDay(_startTime)} - ${_formatTimeOfDay(_endTime)}",
-                                    style: GoogleFonts.lexend(
-                                      fontSize: 11,
-                                      color: const Color(0xFF0288D1),
-                                      fontWeight: FontWeight.w600,
+                                ),
+                                const SizedBox(width: 8),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFF0288D1),
+                                    borderRadius: BorderRadius.circular(20),
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Text(
+                                        "Chọn lịch",
+                                        style: GoogleFonts.lexend(
+                                          fontSize: 11,
+                                          color: Colors.white,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 4),
+                                      const Icon(Icons.arrow_forward_ios_rounded, size: 10, color: Colors.white),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 12),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(color: const Color(0xFFE2E8F0)),
+                              ),
+                              child: Row(
+                                children: [
+                                  Expanded(
+                                    flex: 4,
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        const Icon(Icons.stadium_rounded, size: 15, color: Color(0xFF0288D1)),
+                                        const SizedBox(width: 4),
+                                        Flexible(
+                                          child: Text(
+                                            _selectedCourtName.isNotEmpty ? _selectedCourtName : "Chưa chọn sân",
+                                            style: GoogleFonts.lexend(fontSize: 11, fontWeight: FontWeight.bold),
+                                            overflow: TextOverflow.ellipsis,
+                                            maxLines: 1,
+                                          ),
+                                        ),
+                                      ],
                                     ),
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                  Container(width: 1, height: 16, color: Colors.grey.shade300, margin: const EdgeInsets.symmetric(horizontal: 4)),
+                                  Expanded(
+                                    flex: 3,
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      mainAxisAlignment: MainAxisAlignment.center,
+                                      children: [
+                                        const Icon(Icons.calendar_today_rounded, size: 14, color: Color(0xFF0288D1)),
+                                        const SizedBox(width: 4),
+                                        Text(
+                                          "${_selectedDate.day}/${_selectedDate.month}/${_selectedDate.year}",
+                                          style: GoogleFonts.lexend(fontSize: 11, fontWeight: FontWeight.bold),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  Container(width: 1, height: 16, color: Colors.grey.shade300, margin: const EdgeInsets.symmetric(horizontal: 4)),
+                                  Expanded(
+                                    flex: 4,
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      mainAxisAlignment: MainAxisAlignment.end,
+                                      children: [
+                                        const Icon(Icons.access_time_rounded, size: 14, color: Color(0xFF0288D1)),
+                                        const SizedBox(width: 4),
+                                        Flexible(
+                                          child: Text(
+                                            "${_formatTimeOfDay(_startTime)} - ${_formatTimeOfDay(_endTime)}",
+                                            style: GoogleFonts.lexend(fontSize: 11, fontWeight: FontWeight.bold, color: const Color(0xFF0288D1)),
+                                            overflow: TextOverflow.ellipsis,
+                                            maxLines: 1,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
                                   ),
                                 ],
                               ),
                             ),
-                            const Icon(Icons.arrow_forward_ios_rounded, size: 14, color: Color(0xFF0288D1)),
                           ],
                         ),
                       ),
@@ -592,153 +796,66 @@ class _AddEditEventSheetState extends State<AddEditEventSheet> {
                     const SizedBox(height: 16),
 
                     // Chọn sân tổ chức
-                    _buildLabel("Sân tổ chức"),
-                    if (widget.courts.isNotEmpty)
-                      DropdownButtonFormField<String>(
-                        isExpanded: true,
-                        value: widget.courts.any((c) => c.name == _selectedCourtName)
-                            ? _selectedCourtName
-                            : widget.courts.first.name,
-                        decoration: _inputDecoration(prefixIcon: Icons.stadium_rounded),
-                        items: widget.courts.map((c) {
-                          return DropdownMenuItem(
-                            value: c.name,
-                            child: Text(
-                              c.name,
-                              style: GoogleFonts.lexend(fontSize: 13),
-                              overflow: TextOverflow.ellipsis,
-                              maxLines: 1,
-                            ),
-                          );
-                        }).toList(),
-                        onChanged: (val) {
-                          if (val != null) setState(() => _selectedCourtName = val);
-                        },
-                      )
-                    else
-                      TextFormField(
-                        initialValue: _selectedCourtName,
-                        decoration: _inputDecoration(
-                          hint: "VD: Sân 1, Sân A",
-                          prefixIcon: Icons.stadium_rounded,
-                        ),
-                        onChanged: (v) => _selectedCourtName = v,
-                      ),
-                    const SizedBox(height: 16),
-
-                    // Ngày diễn ra
-                    _buildLabel("Ngày tổ chức *"),
-                    InkWell(
-                      onTap: _pickDate,
-                      borderRadius: BorderRadius.circular(14),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFF8FAFC),
-                          borderRadius: BorderRadius.circular(14),
-                          border: Border.all(color: const Color(0xFFE2E8F0)),
-                        ),
-                        child: Row(
-                          children: [
-                            const Icon(Icons.calendar_today_rounded, size: 20, color: AppColors.primary),
-                            const SizedBox(width: 12),
-                            Text(
-                              "${_selectedDate.day}/${_selectedDate.month}/${_selectedDate.year}",
-                              style: GoogleFonts.lexend(
-                                fontSize: 14,
-                                fontWeight: FontWeight.w600,
-                                color: AppColors.onBackground,
-                              ),
-                            ),
-                            const Spacer(),
-                            const Icon(Icons.keyboard_arrow_down_rounded, color: Colors.grey),
-                          ],
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-
-                    // Giờ bắt đầu - Giờ kết thúc
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              _buildLabel("Giờ bắt đầu *"),
-                              InkWell(
-                                onTap: _pickStartTime,
-                                borderRadius: BorderRadius.circular(14),
-                                child: Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-                                  decoration: BoxDecoration(
-                                    color: const Color(0xFFF8FAFC),
-                                    borderRadius: BorderRadius.circular(14),
-                                    border: Border.all(color: const Color(0xFFE2E8F0)),
-                                  ),
-                                  child: Row(
-                                    children: [
-                                      const Icon(Icons.access_time_rounded, size: 18, color: AppColors.primary),
-                                      const SizedBox(width: 8),
-                                      Text(
-                                        _formatTimeOfDay(_startTime),
-                                        style: GoogleFonts.lexend(fontSize: 13, fontWeight: FontWeight.w600),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              _buildLabel("Giờ kết thúc *"),
-                              InkWell(
-                                onTap: _pickEndTime,
-                                borderRadius: BorderRadius.circular(14),
-                                child: Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-                                  decoration: BoxDecoration(
-                                    color: const Color(0xFFF8FAFC),
-                                    borderRadius: BorderRadius.circular(14),
-                                    border: Border.all(color: const Color(0xFFE2E8F0)),
-                                  ),
-                                  child: Row(
-                                    children: [
-                                      const Icon(Icons.access_time_filled_rounded, size: 18, color: AppColors.primary),
-                                      const SizedBox(width: 8),
-                                      Text(
-                                        _formatTimeOfDay(_endTime),
-                                        style: GoogleFonts.lexend(fontSize: 13, fontWeight: FontWeight.w600),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 16),
+                    // _buildLabel("Sân tổ chức"),
+                    // if (widget.courts.isNotEmpty)
+                    //   DropdownButtonFormField<String>(
+                    //     isExpanded: true,
+                    //     value: widget.courts.any((c) => c.name == _selectedCourtName)
+                    //         ? _selectedCourtName
+                    //         : widget.courts.first.name,
+                    //     decoration: _inputDecoration(prefixIcon: Icons.stadium_rounded),
+                    //     items: widget.courts.map((c) {
+                    //       return DropdownMenuItem(
+                    //         value: c.name,
+                    //         child: Text(
+                    //           c.name,
+                    //           style: GoogleFonts.lexend(fontSize: 13),
+                    //           overflow: TextOverflow.ellipsis,
+                    //           maxLines: 1,
+                    //         ),
+                    //       );
+                    //     }).toList(),
+                    //     onChanged: (val) {
+                    //       if (val != null) setState(() => _selectedCourtName = val);
+                    //     },
+                    //   )
+                    // else
+                    //   TextFormField(
+                    //     initialValue: _selectedCourtName,
+                    //     decoration: _inputDecoration(
+                    //       hint: "VD: Sân 1, Sân A",
+                    //       prefixIcon: Icons.stadium_rounded,
+                    //     ),
+                    //     onChanged: (v) => _selectedCourtName = v,
+                    //   ),
+                    // const SizedBox(height: 16),
 
                     // Giá vé
                     _buildLabel("Giá vé tham gia (VNĐ/người) *"),
                     TextFormField(
                       controller: _priceController,
                       keyboardType: TextInputType.number,
+                      inputFormatters: [
+                        FilteringTextInputFormatter.digitsOnly,
+                        LengthLimitingTextInputFormatter(7),
+                      ],
                       style: GoogleFonts.lexend(fontSize: 14),
                       decoration: _inputDecoration(
                         hint: "50000",
                         prefixIcon: Icons.payments_rounded,
+                        suffixText: "đ/người",
+                        helperText: "Giá vé quy định từ 50.000đ đến 300.000đ / người",
                       ),
-                      validator: (val) => (val == null || val.trim().isEmpty)
-                          ? "Nhập giá vé"
-                          : null,
+                      validator: (val) {
+                        if (val == null || val.trim().isEmpty) {
+                          return "Vui lòng nhập giá vé";
+                        }
+                        final num = int.tryParse(val.trim());
+                        if (num == null) return "Giá vé không hợp lệ";
+                        if (num < 50000) return "Giá vé tối thiểu là 50.000đ";
+                        if (num > 300000) return "Giá vé tối đa là 300.000đ";
+                        return null;
+                      },
                     ),
                     const SizedBox(height: 16),
 
@@ -897,7 +1014,7 @@ class _AddEditEventSheetState extends State<AddEditEventSheet> {
       children: [
         _buildLabel("Ảnh Banner sự kiện"),
         InkWell(
-          onTap: _pickImage,
+          onTap: _showImagePickerModal,
           borderRadius: BorderRadius.circular(16),
           child: Container(
             height: 140,
@@ -905,26 +1022,79 @@ class _AddEditEventSheetState extends State<AddEditEventSheet> {
             decoration: BoxDecoration(
               color: const Color(0xFFF1F5F9),
               borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: const Color(0xFFCBD5E1), style: BorderStyle.solid),
+              border: Border.all(
+                color: (_selectedImage != null || (existingBanner != null && existingBanner.isNotEmpty))
+                    ? AppColors.primary
+                    : const Color(0xFFCBD5E1),
+                width: (_selectedImage != null || (existingBanner != null && existingBanner.isNotEmpty)) ? 1.5 : 1,
+              ),
             ),
             child: _selectedImage != null
-                ? ClipRRect(
-                    borderRadius: BorderRadius.circular(15),
-                    child: Image.file(
-                      File(_selectedImage!.path),
-                      fit: BoxFit.cover,
-                      width: double.infinity,
-                    ),
-                  )
-                : (existingBanner != null && existingBanner.isNotEmpty)
-                    ? ClipRRect(
+                ? Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      ClipRRect(
                         borderRadius: BorderRadius.circular(15),
-                        child: Image.network(
-                          existingBanner,
+                        child: Image.file(
+                          File(_selectedImage!.path),
                           fit: BoxFit.cover,
                           width: double.infinity,
-                          errorBuilder: (_, __, ___) => _buildImagePlaceholder(),
                         ),
+                      ),
+                      Positioned(
+                        top: 8,
+                        right: 8,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: Colors.black.withValues(alpha: 0.65),
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(Icons.edit_rounded, color: Colors.white, size: 14),
+                              const SizedBox(width: 4),
+                              Text("Đổi ảnh", style: GoogleFonts.lexend(color: Colors.white, fontSize: 11)),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  )
+                : (existingBanner != null && existingBanner.isNotEmpty)
+                    ? Stack(
+                        fit: StackFit.expand,
+                        children: [
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(15),
+                            child: Image.network(
+                              existingBanner,
+                              fit: BoxFit.cover,
+                              width: double.infinity,
+                              errorBuilder: (context, error, stackTrace) => _buildImagePlaceholder(),
+                            ),
+                          ),
+                          Positioned(
+                            top: 8,
+                            right: 8,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                              decoration: BoxDecoration(
+                                color: Colors.black.withValues(alpha: 0.65),
+                                borderRadius: BorderRadius.circular(20),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const Icon(Icons.edit_rounded, color: Colors.white, size: 14),
+                                  const SizedBox(width: 4),
+                                  Text("Đổi ảnh", style: GoogleFonts.lexend(color: Colors.white, fontSize: 11)),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ],
                       )
                     : _buildImagePlaceholder(),
           ),
@@ -958,12 +1128,21 @@ class _AddEditEventSheetState extends State<AddEditEventSheet> {
     );
   }
 
-  InputDecoration _inputDecoration({String? hint, IconData? prefixIcon}) {
+  InputDecoration _inputDecoration({
+    String? hint,
+    IconData? prefixIcon,
+    String? suffixText,
+    String? helperText,
+  }) {
     return InputDecoration(
       hintText: hint,
       hintStyle: GoogleFonts.lexend(color: Colors.grey.shade400, fontSize: 13),
       prefixIcon: prefixIcon != null ? Icon(prefixIcon, color: AppColors.primary, size: 18) : null,
       prefixIconConstraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+      suffixText: suffixText,
+      suffixStyle: GoogleFonts.lexend(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.primary),
+      helperText: helperText,
+      helperStyle: GoogleFonts.lexend(fontSize: 11, color: Colors.grey.shade600),
       filled: true,
       fillColor: const Color(0xFFF8FAFC),
       isDense: true,

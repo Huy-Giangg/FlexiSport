@@ -1,7 +1,6 @@
 import 'package:flexisport_app/features/customer/ai_chat/presentation/providers/ai_chat_provider.dart';
-import 'package:flexisport_app/features/customer/ai_chat/presentation/widgets/api_key_dialog.dart';
 import 'package:flexisport_app/features/customer/ai_chat/presentation/widgets/chat_bubble.dart';
-import 'package:flexisport_app/features/customer/ai_chat/presentation/widgets/quick_prompts_widget.dart';
+import 'package:flexisport_app/features/customer/ai_chat/presentation/widgets/server_config_dialog.dart';
 import 'package:flexisport_app/features/customer/sports_complex/presentation/providers/sports_complex_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -69,13 +68,13 @@ class _AiChatPageState extends State<AiChatPage> {
     _scrollToBottom();
   }
 
-  void _openApiKeyDialog() {
+  void _openServerConfigDialog() {
     final chatProvider = context.read<AiChatProvider>();
     showDialog(
       context: context,
-      builder: (context) => ApiKeyDialog(
-        currentApiKey: chatProvider.currentApiKey,
-        onSave: (key) => chatProvider.saveApiKey(key),
+      builder: (context) => ServerConfigDialog(
+        currentUrl: chatProvider.serverUrl,
+        onSave: (url) => chatProvider.saveServerUrl(url),
       ),
     );
   }
@@ -116,12 +115,12 @@ class _AiChatPageState extends State<AiChatPage> {
   Widget build(BuildContext context) {
     final chatProvider = context.watch<AiChatProvider>();
 
-    // Cuộn xuống khi có tin nhắn mới
+    // Cuộn xuống khi có tin nhắn mới hoặc streaming token
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_scrollController.hasClients && chatProvider.messages.isNotEmpty) {
         _scrollController.animateTo(
           _scrollController.position.maxScrollExtent,
-          duration: const Duration(milliseconds: 200),
+          duration: const Duration(milliseconds: 150),
           curve: Curves.easeOut,
         );
       }
@@ -152,7 +151,7 @@ class _AiChatPageState extends State<AiChatPage> {
                 shape: BoxShape.circle,
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.green.withOpacity(0.3),
+                    color: Colors.green.withValues(alpha: 0.3),
                     blurRadius: 6,
                     offset: const Offset(0, 2),
                   ),
@@ -192,7 +191,7 @@ class _AiChatPageState extends State<AiChatPage> {
                     ),
                     const SizedBox(width: 5),
                     const Text(
-                      "Trợ lý Thể thao • Trực tuyến",
+                      "Chatbot Sports RAG • Trực tuyến",
                       style: TextStyle(
                         fontSize: 12,
                         color: Color(0xFF64748B),
@@ -207,9 +206,9 @@ class _AiChatPageState extends State<AiChatPage> {
         ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.vpn_key_outlined, color: Color(0xFF006D38)),
-            tooltip: "Cấu hình API Key",
-            onPressed: _openApiKeyDialog,
+            icon: const Icon(Icons.dns_rounded, color: Color(0xFF006D38)),
+            tooltip: "Cài đặt máy chủ AI",
+            onPressed: _openServerConfigDialog,
           ),
           IconButton(
             icon: const Icon(Icons.refresh_rounded, color: Colors.black54),
@@ -226,28 +225,20 @@ class _AiChatPageState extends State<AiChatPage> {
             Expanded(
               child: ListView.builder(
                 controller: _scrollController,
-                padding: const EdgeInsets.only(top: 12, bottom: 12),
-                itemCount: chatProvider.messages.length + (chatProvider.isLoading ? 1 : 0),
+                padding: const EdgeInsets.only(top: 8, bottom: 12),
+                itemCount: chatProvider.messages.length,
                 itemBuilder: (context, index) {
-                  if (index < chatProvider.messages.length) {
-                    final message = chatProvider.messages[index];
-                    return ChatBubble(
-                      message: message,
-                      onQuickReplySelected: (reply) => _sendMessage(reply),
-                    );
-                  } else {
-                    // Loading indicator khi AI đang suy nghĩ
-                    return _buildLoadingBubble();
-                  }
+                  final message = chatProvider.messages[index];
+                  return ChatBubble(
+                    message: message,
+                    onQuickReplySelected: (reply) => _sendMessage(reply),
+                  );
                 },
               ),
             ),
 
-            // Dãy câu hỏi gợi ý nhanh (Quick Prompts)
-            QuickPromptsWidget(
-              prompts: AiChatProvider.defaultPrompts,
-              onSelected: (prompt) => _sendMessage(prompt),
-            ),
+            // Thanh câu hỏi mẫu nằm ngang trên thanh nhắn tin
+            _buildHorizontalSuggestionsBar(chatProvider),
 
             // Khung nhập tin nhắn
             _buildInputBar(chatProvider),
@@ -257,54 +248,63 @@ class _AiChatPageState extends State<AiChatPage> {
     );
   }
 
-  Widget _buildLoadingBubble() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+  Widget _buildHorizontalSuggestionsBar(AiChatProvider chatProvider) {
+    final prompts = AiChatProvider.defaultPrompts;
+    return Container(
+      height: 38,
+      margin: const EdgeInsets.only(bottom: 6),
       child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          const SizedBox(width: 12),
+          // Icon chat bên trái
           Container(
-            width: 34,
-            height: 34,
-            decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                colors: [Color(0xFF00A86B), Color(0xFF006D38)],
-              ),
-              shape: BoxShape.circle,
-            ),
-            child: const Center(
-              child: Icon(Icons.smart_toy_rounded, color: Colors.white, size: 20),
-            ),
-          ),
-          const SizedBox(width: 10),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            width: 32,
+            height: 32,
             decoration: BoxDecoration(
               color: Colors.white,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: Colors.grey.shade200),
+              shape: BoxShape.circle,
+              border: Border.all(color: Colors.grey.shade300, width: 1),
             ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const SizedBox(
-                  width: 16,
-                  height: 16,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF006D38)),
+            child: const Center(
+              child: Icon(
+                Icons.chat_bubble_outline_rounded,
+                size: 16,
+                color: Color(0xFF334155),
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          // Danh sách các câu hỏi mẫu cuộn ngang
+          Expanded(
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              physics: const BouncingScrollPhysics(),
+              padding: const EdgeInsets.only(right: 12),
+              itemCount: prompts.length,
+              separatorBuilder: (_, _) => const SizedBox(width: 8),
+              itemBuilder: (context, index) {
+                final prompt = prompts[index];
+                return InkWell(
+                  onTap: chatProvider.isLoading ? null : () => _sendMessage(prompt),
+                  borderRadius: BorderRadius.circular(20),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF1F5F9),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    alignment: Alignment.center,
+                    child: Text(
+                      prompt,
+                      style: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF0F172A),
+                      ),
+                    ),
                   ),
-                ),
-                const SizedBox(width: 10),
-                Text(
-                  "FlexiBot đang phân tích thông tin sân...",
-                  style: TextStyle(
-                    fontSize: 13,
-                    color: Colors.grey.shade600,
-                    fontStyle: FontStyle.italic,
-                  ),
-                ),
-              ],
+                );
+              },
             ),
           ),
         ],
@@ -320,7 +320,7 @@ class _AiChatPageState extends State<AiChatPage> {
         border: Border(top: BorderSide(color: Colors.grey.shade200)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.04),
+            color: Colors.black.withValues(alpha: 0.04),
             blurRadius: 6,
             offset: const Offset(0, -2),
           ),
@@ -332,8 +332,9 @@ class _AiChatPageState extends State<AiChatPage> {
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 16),
               decoration: BoxDecoration(
-                color: const Color(0xFFF1F5F9),
-                borderRadius: BorderRadius.circular(24),
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: const Color(0xFFE2E8F0)),
               ),
               child: TextField(
                 controller: _textController,
@@ -345,7 +346,7 @@ class _AiChatPageState extends State<AiChatPage> {
                 },
                 onSubmitted: (_) => _sendMessage(),
                 decoration: const InputDecoration(
-                  hintText: "Hỏi FlexiBot về sân, giá, đặt lịch, thanh toán...",
+                  hintText: "Nhập câu hỏi...",
                   hintStyle: TextStyle(fontSize: 13, color: Color(0xFF94A3B8)),
                   border: InputBorder.none,
                 ),

@@ -51,7 +51,7 @@ class ChatVenueCard extends StatelessWidget {
         border: Border.all(color: Colors.grey.shade200),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.06),
+            color: Colors.black.withValues(alpha: 0.06),
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),
@@ -85,7 +85,7 @@ class ChatVenueCard extends StatelessWidget {
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
                   decoration: BoxDecoration(
-                    color: Colors.black.withOpacity(0.7),
+                    color: Colors.black.withValues(alpha: 0.7),
                     borderRadius: BorderRadius.circular(10),
                   ),
                   child: Row(
@@ -113,7 +113,7 @@ class ChatVenueCard extends StatelessWidget {
                   child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                     decoration: BoxDecoration(
-                      color: AppColors.primaryContainer.withOpacity(0.9),
+                      color: AppColors.primaryContainer.withValues(alpha: 0.9),
                       borderRadius: BorderRadius.circular(10),
                     ),
                     child: Text(

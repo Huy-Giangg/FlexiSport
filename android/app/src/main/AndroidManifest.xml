@@ -11,10 +11,16 @@
 
     <!-- Quyền lập lịch thông báo chính xác (Android 12+) -->
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+
+    <!-- Quyền truy cập máy ảnh và thư viện hình ảnh đầy đủ -->
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
     <application
         android:label="FlexiSport"
         android:name="${applicationName}"
-        android:icon="@mipmap/launcher_icon">
+        android:icon="@mipmap/launcher_icon"
+        android:usesCleartextTraffic="true">
         
         <activity
             android:name=".MainActivity"
@@ -53,9 +59,13 @@
 
          In particular, this is used by the Flutter engine in io.flutter.plugin.text.ProcessTextPlugin. -->
     <queries>
+        <!-- Package visibility for Google Play Services & Google Play Store (Android 11+) -->
+        <package android:name="com.google.android.gms" />
+        <package android:name="com.android.vending" />
         <intent>
             <action android:name="android.intent.action.PROCESS_TEXT"/>
             <data android:mimeType="text/plain"/>
         </intent>
     </queries>
 </manifest>
+

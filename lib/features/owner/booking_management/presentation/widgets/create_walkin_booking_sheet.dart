@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import 'package:flexisport_app/core/theme/app_colors.dart';
@@ -250,7 +251,6 @@ class _CreateWalkInBookingSheetState extends State<CreateWalkInBookingSheet> {
   }
 
   Future<void> _submit() async {
-    if (!_formKey.currentState!.validate()) return;
     if (_selectedCourt == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("Vui lòng chọn sân thi đấu")),
@@ -263,6 +263,7 @@ class _CreateWalkInBookingSheetState extends State<CreateWalkInBookingSheet> {
       );
       return;
     }
+    if (!_formKey.currentState!.validate()) return;
 
     setState(() {
       _isSubmitting = true;
@@ -607,9 +608,13 @@ class _CreateWalkInBookingSheetState extends State<CreateWalkInBookingSheet> {
 
               TextFormField(
                 controller: _nameController,
+                inputFormatters: [
+                  LengthLimitingTextInputFormatter(50),
+                ],
                 style: GoogleFonts.lexend(fontSize: 13),
                 decoration: InputDecoration(
                   labelText: "Tên khách hàng *",
+                  hintText: "Ví dụ: Nguyễn Văn A",
                   prefixIcon: const Icon(Icons.person_outline, color: AppColors.primary),
                   filled: true,
                   fillColor: const Color(0xFFF9FAFB),
@@ -617,17 +622,38 @@ class _CreateWalkInBookingSheetState extends State<CreateWalkInBookingSheet> {
                     borderRadius: BorderRadius.circular(12),
                     borderSide: BorderSide(color: Colors.grey.shade300),
                   ),
+                  errorMaxLines: 2,
                 ),
-                validator: (val) => val == null || val.trim().isEmpty ? "Vui lòng nhập tên khách" : null,
+                validator: (val) {
+                  if (val == null || val.trim().isEmpty) {
+                    return "Vui lòng nhập tên khách hàng";
+                  }
+                  final trimmed = val.trim();
+                  if (trimmed.length < 2) {
+                    return "Tên khách hàng phải có ít nhất 2 ký tự";
+                  }
+                  final nameRegExp = RegExp(
+                    r"^[a-zA-ZÀÁÂÃÈÉÊÌÍÒÓÔÕÙÚĂĐĨŨƠàáâãèéêìíòóôõùúăđĩũơƯĂẠẢẤẦẨẪẬẮẰẲẴẶẸẺẼỀỀỂưăạảấầẩẫậắằẳẵặẹẻẽềềểỄỆỈỊỌỎỐỒỔỖỘỚỜỞỠỢỤỦỨỪỬỮỰỲỴÝỶỸửữựỳỵýỷỹ\s]+$",
+                  );
+                  if (!nameRegExp.hasMatch(trimmed)) {
+                    return "Tên chỉ được chứa chữ cái, không bao gồm số hay ký tự đặc biệt";
+                  }
+                  return null;
+                },
               ),
               const SizedBox(height: 10),
 
               TextFormField(
                 controller: _phoneController,
                 keyboardType: TextInputType.phone,
+                inputFormatters: [
+                  FilteringTextInputFormatter.digitsOnly,
+                  LengthLimitingTextInputFormatter(10),
+                ],
                 style: GoogleFonts.lexend(fontSize: 13),
                 decoration: InputDecoration(
                   labelText: "Số điện thoại *",
+                  hintText: "Ví dụ: 0912345678",
                   prefixIcon: const Icon(Icons.phone_outlined, color: AppColors.primary),
                   filled: true,
                   fillColor: const Color(0xFFF9FAFB),
@@ -635,12 +661,24 @@ class _CreateWalkInBookingSheetState extends State<CreateWalkInBookingSheet> {
                     borderRadius: BorderRadius.circular(12),
                     borderSide: BorderSide(color: Colors.grey.shade300),
                   ),
+                  errorMaxLines: 2,
                 ),
-                validator: (val) => val == null || val.trim().isEmpty ? "Vui lòng nhập SĐT" : null,
+                validator: (val) {
+                  if (val == null || val.trim().isEmpty) {
+                    return "Vui lòng nhập số điện thoại";
+                  }
+                  final phone = val.trim();
+                  final phoneRegExp = RegExp(r'^(0[35789])[0-9]{8}$');
+                  if (!phoneRegExp.hasMatch(phone)) {
+                    return "Số điện thoại không hợp lệ (gồm 10 số, ví dụ 0987654321)";
+                  }
+                  return null;
+                },
               ),
               const SizedBox(height: 10),
 
               Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Expanded(
                     child: Container(
@@ -667,10 +705,16 @@ class _CreateWalkInBookingSheetState extends State<CreateWalkInBookingSheet> {
                     child: TextFormField(
                       controller: _depositController,
                       keyboardType: TextInputType.number,
+                      inputFormatters: [
+                        FilteringTextInputFormatter.digitsOnly,
+                        LengthLimitingTextInputFormatter(9),
+                      ],
                       style: GoogleFonts.lexend(fontSize: 13),
                       decoration: InputDecoration(
                         labelText: "Tiền đã thu",
                         hintText: "Mặc định thu đủ",
+                        suffixText: "đ",
+                        suffixStyle: GoogleFonts.lexend(fontSize: 12, color: Colors.grey.shade600),
                         prefixIcon: const Icon(Icons.payments_outlined, color: Color(0xFF059669)),
                         filled: true,
                         fillColor: const Color(0xFFF9FAFB),
@@ -678,7 +722,28 @@ class _CreateWalkInBookingSheetState extends State<CreateWalkInBookingSheet> {
                           borderRadius: BorderRadius.circular(12),
                           borderSide: BorderSide(color: Colors.grey.shade300),
                         ),
+                        errorMaxLines: 2,
                       ),
+                      validator: (val) {
+                        if (val == null || val.trim().isEmpty) {
+                          return null; // Mặc định thu đủ
+                        }
+                        final clean = val.replaceAll(RegExp(r'[^0-9]'), '').trim();
+                        final amount = double.tryParse(clean);
+                        if (amount == null) {
+                          return "Số tiền không hợp lệ";
+                        }
+                        if (amount < 0) {
+                          return "Số tiền không được âm";
+                        }
+                        if (_selectedSlotIndexes.isEmpty) {
+                          return "Vui lòng chọn khung giờ";
+                        }
+                        if (amount > _totalPrice) {
+                          return "Tối đa ${_formatCurrency(_totalPrice)}";
+                        }
+                        return null;
+                      },
                     ),
                   ),
                 ],

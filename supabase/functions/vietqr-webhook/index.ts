@@ -19,9 +19,15 @@ serve(async (req) => {
 
     // 1. Webhook Authentication
     const webhookToken = Deno.env.get('WEBHOOK_SECRET_TOKEN') // Secure Token set on SePay/Casso/PayOS settings
-    const receivedToken = req.headers.get('x-api-key') || req.headers.get('Authorization')?.replace('Apikey ', '')
+    const anonKey = Deno.env.get('SUPABASE_ANON_KEY')
+    const receivedToken = req.headers.get('x-api-key') || 
+                          req.headers.get('apikey') || 
+                          req.headers.get('Authorization')?.replace('Bearer ', '')?.replace('Apikey ', '')
 
-    if (webhookToken && receivedToken !== webhookToken) {
+    const isAuthorized = !webhookToken || 
+                         (receivedToken && (receivedToken === webhookToken || receivedToken === anonKey))
+
+    if (!isAuthorized) {
       console.error("Webhook authentication failed. Tokens do not match.");
       return new Response(JSON.stringify({ error: "Unauthorized" }), { 
         status: 401, 
@@ -85,19 +91,69 @@ serve(async (req) => {
       .from('payments')
       .select('id, amount, status, booking_id')
       .eq('payment_reference', paymentRef)
-      .single()
+      .maybeSingle()
 
-    // Fetch all available references for debugging
-    const { data: allPayments } = await client.from('payments').select('payment_reference');
+    // 3b. If not found in payments, check event_bookings table (for event ticket purchases)
+    if (!paymentRecord) {
+      console.log(`Reference ${paymentRef} not in payments, searching in event_bookings...`);
+      const { data: eventRecord, error: evError } = await client
+        .from('event_bookings')
+        .select('id, total_amount, status, user_id, note')
+        .ilike('note', `%${paymentRef}%`)
+        .maybeSingle()
 
-    if (fetchError || !paymentRecord) {
-      console.error(`Transaction not found for reference: ${paymentRef}`, fetchError);
+      if (!eventRecord) {
+        console.error(`Transaction not found in payments or event_bookings for reference: ${paymentRef}`);
+        const { data: allPayments } = await client.from('payments').select('payment_reference');
+        return new Response(JSON.stringify({ 
+          error: "Payment record not found",
+          details: "No payment or event booking matched the reference.",
+          available_references: allPayments ? allPayments.map(p => p.payment_reference) : []
+        }), { 
+          status: 404, 
+          headers: { ...corsHeaders, "Content-Type": "application/json" } 
+        })
+      }
+
+      // If event booking has already succeeded (Idempotency)
+      if (eventRecord.status === 'completed') {
+        console.log(`Event booking ${eventRecord.id} with ${paymentRef} was already processed successfully.`);
+        return new Response(JSON.stringify({ success: true, message: "Already processed" }), { 
+          status: 200, 
+          headers: { ...corsHeaders, "Content-Type": "application/json" } 
+        })
+      }
+
+      // Validate amount for event booking
+      const expectedAmount = Number(eventRecord.total_amount)
+      if (amount < expectedAmount) {
+        console.warn(`Transferred amount (${amount}) is less than expected event booking amount (${expectedAmount}).`);
+        return new Response(JSON.stringify({ error: "Amount mismatch" }), { 
+          status: 400, 
+          headers: { ...corsHeaders, "Content-Type": "application/json" } 
+        })
+      }
+
+      // Update event booking to completed
+      const { error: updateEvError } = await client
+        .from('event_bookings')
+        .update({ 
+          status: 'completed',
+        })
+        .eq('id', eventRecord.id)
+
+      if (updateEvError) {
+        throw new Error(`Failed to update event_bookings: ${updateEvError.message}`)
+      }
+
+      console.log(`Event booking ${eventRecord.id} confirmed successfully with reference ${paymentRef}.`);
       return new Response(JSON.stringify({ 
-        error: "Payment record not found",
-        details: fetchError ? fetchError.message : "No payment record matched the reference.",
-        available_references: allPayments ? allPayments.map(p => p.payment_reference) : []
+        success: true, 
+        message: "Event booking payment processed successfully",
+        booking_id: eventRecord.id,
+        reference: paymentRef
       }), { 
-        status: 404, 
+        status: 200, 
         headers: { ...corsHeaders, "Content-Type": "application/json" } 
       })
     }
@@ -152,9 +208,7 @@ serve(async (req) => {
     const { error: updateBookingError } = await client
       .from('bookings')
       .update({ 
-        status: 'completed',
-        booking_status: 'confirmed',
-        payment_status: 'paid'
+        status: 'completed'
       })
       .eq('id', bookingId)
 

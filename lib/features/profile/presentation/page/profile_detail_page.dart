@@ -22,6 +22,11 @@ class _ProfileDetailPageState extends State<ProfileDetailPage> {
   double _height = 0.0;
   double _weight = 0.0;
 
+  String _preferredLocation = 'Hà Nội: Bắc Từ Liêm';
+  List<String> _favoriteSports = ['Cầu lông', 'Bóng đá'];
+  List<String> _goals = ['Giao lưu & kết nối', 'Luyện tập rèn luyện'];
+  List<String> _playFrequency = ['Khi có thời gian rảnh', 'Chiều', 'Tối'];
+
   @override
   void initState() {
     super.initState();
@@ -70,6 +75,39 @@ class _ProfileDetailPageState extends State<ProfileDetailPage> {
           
           _height = (data['height'] as num?)?.toDouble() ?? 0.0;
           _weight = (data['weight'] as num?)?.toDouble() ?? 0.0;
+
+          if (data['location'] != null && data['location'].toString().trim().isNotEmpty) {
+            _preferredLocation = data['location'].toString();
+          } else if (data['preferred_location'] != null && data['preferred_location'].toString().trim().isNotEmpty) {
+            _preferredLocation = data['preferred_location'].toString();
+          }
+
+          if (data['favorite_sports'] != null) {
+            final sports = data['favorite_sports'];
+            if (sports is List && sports.isNotEmpty) {
+              _favoriteSports = sports.map((e) => e.toString()).toList();
+            } else if (sports is String && sports.trim().isNotEmpty) {
+              _favoriteSports = sports.split(',').map((e) => e.trim()).where((e) => e.isNotEmpty).toList();
+            }
+          }
+
+          if (data['goals'] != null) {
+            final g = data['goals'];
+            if (g is List && g.isNotEmpty) {
+              _goals = g.map((e) => e.toString()).toList();
+            } else if (g is String && g.trim().isNotEmpty) {
+              _goals = g.split(',').map((e) => e.trim()).where((e) => e.isNotEmpty).toList();
+            }
+          }
+
+          if (data['play_frequency'] != null) {
+            final f = data['play_frequency'];
+            if (f is List && f.isNotEmpty) {
+              _playFrequency = f.map((e) => e.toString()).toList();
+            } else if (f is String && f.trim().isNotEmpty) {
+              _playFrequency = f.split(',').map((e) => e.trim()).where((e) => e.isNotEmpty).toList();
+            }
+          }
         });
       }
     } catch (e) {
@@ -165,274 +203,520 @@ class _ProfileDetailPageState extends State<ProfileDetailPage> {
         ),
         centerTitle: true,
       ),
-      body: Column(
-        children: [
-          Stack(
-            children: [
-              Container(
-                height: 180,
-                width: double.infinity,
-                decoration: const BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [
-                      AppColors.primaryContainer,
-                      AppColors.primary,
-                    ],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
+      body: SingleChildScrollView(
+        physics: const BouncingScrollPhysics(),
+        child: Column(
+          children: [
+            Container(
+              margin: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(20),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.04),
+                    blurRadius: 14,
+                    offset: const Offset(0, 4),
                   ),
-                  borderRadius: BorderRadius.vertical(
-                    bottom: Radius.circular(24),
-                  ),
-                ),
+                ],
+                border: Border.all(color: Colors.grey.shade100),
               ),
-              Container(
-                margin: const EdgeInsets.all(12),
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFE0E8E1),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Column(
-                  children: [
-                    Row(
-                      children: [
-                        Container(
-                          width: 70,
-                          height: 70,
-                          decoration: const BoxDecoration(
-                            color: Colors.purple,
-                            shape: BoxShape.circle,
+              child: Column(
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        width: 66,
+                        height: 66,
+                        decoration: const BoxDecoration(
+                          gradient: LinearGradient(
+                            colors: [Color(0xFF2E7D32), Color(0xFF4CAF50)],
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
                           ),
-                          alignment: Alignment.center,
-                          child: Text(
-                            _name.isNotEmpty ? _name[0].toUpperCase() : 'U',
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 28,
-                              fontWeight: FontWeight.bold,
+                          shape: BoxShape.circle,
+                        ),
+                        alignment: Alignment.center,
+                        child: Text(
+                          _name.isNotEmpty ? _name[0].toUpperCase() : 'U',
+                          style: GoogleFonts.lexend(
+                            color: Colors.white,
+                            fontSize: 26,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 14),
+                      // User Info
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              _name,
+                              style: GoogleFonts.lexend(
+                                fontSize: 17,
+                                fontWeight: FontWeight.bold,
+                                color: AppColors.onBackground,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              widget.user?.email ?? '',
+                              style: GoogleFonts.lexend(
+                                fontSize: 12,
+                                color: Colors.grey.shade600,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      if (isMyProfile)
+                        InkWell(
+                          borderRadius: BorderRadius.circular(20),
+                          onTap: () async {
+                            final updated = await context.push('/ProfileEditPage', extra: widget.user);
+                            if (updated == true) {
+                              _loadProfileData();
+                            }
+                          },
+                          child: Container(
+                            height: 38,
+                            width: 38,
+                            decoration: BoxDecoration(
+                              color: AppColors.primaryLightBg,
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(
+                              Icons.edit_outlined,
+                              color: AppColors.primary,
+                              size: 18,
                             ),
                           ),
                         ),
-                        const SizedBox(width: 16),
-                        // User Info
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  const Divider(height: 1, color: Color(0xFFF1F5F9)),
+                  const SizedBox(height: 14),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceAround,
+                    children: [
+                      _buildInfoCard("Điện thoại", _phone, Icons.phone_outlined),
+                      Container(width: 1, height: 28, color: Colors.grey.shade200),
+                      _buildInfoCard("Năm sinh", _birthYear, Icons.cake_outlined),
+                      Container(width: 1, height: 28, color: Colors.grey.shade200),
+                      _buildInfoCard("Giới tính", _gender, Icons.person_outline_rounded),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+
+            // Card 1: Thông tin thể chất
+            Container(
+              width: double.infinity,
+              margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(20),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.04),
+                    blurRadius: 14,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+                border: Border.all(color: Colors.grey.shade100),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(7),
+                        decoration: BoxDecoration(
+                          color: AppColors.primaryLightBg,
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: const Icon(
+                          Icons.monitor_heart_outlined,
+                          color: AppColors.primary,
+                          size: 18,
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Text(
+                        "Thông tin thể chất",
+                        style: GoogleFonts.lexend(
+                          fontSize: 15,
+                          fontWeight: FontWeight.bold,
+                          color: AppColors.onBackground,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 14),
+                  Container(
+                    padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF8FAFC),
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: const Color(0xFFE2E8F0)),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                      children: [
                         Expanded(
                           child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text(
-                                _name,
-                                style: const TextStyle(
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.black87,
-                                ),
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(Icons.straighten_rounded, color: Colors.grey.shade500, size: 15),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    "Chiều cao",
+                                    style: GoogleFonts.lexend(color: Colors.grey.shade600, fontSize: 12),
+                                  ),
+                                ],
                               ),
                               const SizedBox(height: 4),
                               Text(
-                                widget.user?.email ?? '',
-                                style: const TextStyle(
-                                  fontSize: 13,
-                                  color: Colors.black54,
+                                _height > 0 ? "${_height.toStringAsFixed(1).replaceAll('.0', '')} cm" : "Chưa cập nhật",
+                                style: GoogleFonts.lexend(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.bold,
+                                  color: AppColors.onBackground,
                                 ),
                               ),
                             ],
                           ),
                         ),
-                        if (isMyProfile)
-                          InkWell(
-                            onTap: () async {
-                              final updated = await context.push('/ProfileEditPage', extra: widget.user);
-                              if (updated == true) {
-                                _loadProfileData();
-                              }
-                            },
-                            child: Container(
-                              height: 38,
-                              width: 38,
-                              decoration: BoxDecoration(
-                                color: Colors.black.withValues(alpha: 0.5),
-                                shape: BoxShape.circle,
+                        Container(
+                          width: 1,
+                          height: 36,
+                          color: Colors.grey.shade300,
+                        ),
+                        Expanded(
+                          child: Column(
+                            children: [
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(Icons.monitor_weight_outlined, color: Colors.grey.shade500, size: 15),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    "Cân nặng",
+                                    style: GoogleFonts.lexend(color: Colors.grey.shade600, fontSize: 12),
+                                  ),
+                                ],
                               ),
-                              child: const Icon(Icons.edit_document, color: Colors.white),
+                              const SizedBox(height: 4),
+                              Text(
+                                _weight > 0 ? "${_weight.toStringAsFixed(1).replaceAll('.0', '')} kg" : "Chưa cập nhật",
+                                style: GoogleFonts.lexend(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.bold,
+                                  color: AppColors.onBackground,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            // Card 2: Cá nhân hóa
+            Container(
+              width: double.infinity,
+              margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(20),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.04),
+                    blurRadius: 14,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+                border: Border.all(color: Colors.grey.shade100),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Section Header
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(7),
+                        decoration: BoxDecoration(
+                          color: AppColors.primaryLightBg,
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: const Icon(
+                          Icons.tune_rounded,
+                          color: AppColors.primary,
+                          size: 18,
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              "Cá nhân hóa",
+                              style: GoogleFonts.lexend(
+                                fontSize: 15,
+                                fontWeight: FontWeight.bold,
+                                color: AppColors.onBackground,
+                              ),
+                            ),
+                            Text(
+                              "Sở thích và thói quen rèn luyện thể thao",
+                              style: GoogleFonts.lexend(
+                                fontSize: 11,
+                                color: AppColors.secondary,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 14),
+                  const Divider(height: 1, color: Color(0xFFF1F5F9)),
+                  const SizedBox(height: 14),
+
+                  // 1. Vị trí yêu thích
+                  _buildPersonalizationSection(
+                    icon: Icons.location_on_rounded,
+                    iconColor: const Color(0xFFE53935),
+                    iconBg: const Color(0xFFFFEBEE),
+                    title: "Vị trí yêu thích",
+                    content: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFFF5F5),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: const Color(0xFFFFCDD2)),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.near_me_rounded, size: 14, color: Color(0xFFE53935)),
+                          const SizedBox(width: 6),
+                          Text(
+                            _preferredLocation,
+                            style: GoogleFonts.lexend(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: const Color(0xFFC62828),
                             ),
                           ),
-                      ],
+                        ],
+                      ),
                     ),
-                    const SizedBox(height: 12),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceAround,
-                      children: [
-                        _buildInfoCard("Điện thoại", _phone, Icons.phone),
-                        _buildInfoCard("Năm sinh", _birthYear, Icons.cake_rounded),
-                        _buildInfoCard("Giới tính", _gender, Icons.transgender),
-                      ],
+                  ),
+
+                  const SizedBox(height: 12),
+
+                  // 2. Môn thể thao
+                  _buildPersonalizationSection(
+                    icon: Icons.emoji_events_rounded,
+                    iconColor: const Color(0xFF2E7D32),
+                    iconBg: const Color(0xFFE8F5E9),
+                    title: "Môn thể thao",
+                    content: Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: _favoriteSports.map((sport) {
+                        return _buildTagBadge(
+                          label: sport,
+                          icon: _getSportIcon(sport),
+                          bg: const Color(0xFFF0FDF4),
+                          textColor: const Color(0xFF15803D),
+                          borderColor: const Color(0xFFBBF7D0),
+                        );
+                      }).toList(),
                     ),
-                  ],
+                  ),
+
+                  const SizedBox(height: 12),
+
+                  // 3. Mục tiêu
+                  _buildPersonalizationSection(
+                    icon: Icons.track_changes_rounded,
+                    iconColor: const Color(0xFFD97706),
+                    iconBg: const Color(0xFFFEF3C7),
+                    title: "Mục tiêu",
+                    content: Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: _goals.map((goal) {
+                        IconData goalIcon = Icons.stars_rounded;
+                        final gLower = goal.toLowerCase();
+                        if (gLower.contains('giao lưu') || gLower.contains('kết nối')) {
+                          goalIcon = Icons.people_alt_rounded;
+                        } else if (gLower.contains('luyện tập') || gLower.contains('sức khỏe') || gLower.contains('thể lực')) {
+                          goalIcon = Icons.fitness_center_rounded;
+                        }
+                        return _buildTagBadge(
+                          label: goal,
+                          icon: goalIcon,
+                          bg: const Color(0xFFFFFBEB),
+                          textColor: const Color(0xFFB45309),
+                          borderColor: const Color(0xFFFDE68A),
+                        );
+                      }).toList(),
+                    ),
+                  ),
+
+                  const SizedBox(height: 12),
+
+                  // 4. Tần suất chơi
+                  _buildPersonalizationSection(
+                    icon: Icons.calendar_month_rounded,
+                    iconColor: const Color(0xFF7C3AED),
+                    iconBg: const Color(0xFFEDE9FE),
+                    title: "Tần suất chơi",
+                    content: Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: _playFrequency.map((freq) {
+                        IconData freqIcon = Icons.schedule_rounded;
+                        final fLower = freq.toLowerCase();
+                        if (fLower.contains('rảnh')) {
+                          freqIcon = Icons.auto_awesome_rounded;
+                        } else if (fLower.contains('chiều')) {
+                          freqIcon = Icons.wb_sunny_rounded;
+                        } else if (fLower.contains('tối')) {
+                          freqIcon = Icons.nightlight_round;
+                        } else if (fLower.contains('sáng')) {
+                          freqIcon = Icons.wb_twilight_rounded;
+                        }
+                        final cleanLabel = freq
+                            .replaceAll(RegExp(r'[\u{1F300}-\u{1F9FF}]|[\u{2600}-\u{26FF}]|[\u{2700}-\u{27BF}]', unicode: true), '')
+                            .trim();
+                        return _buildTagBadge(
+                          label: cleanLabel.isNotEmpty ? cleanLabel : freq,
+                          icon: freqIcon,
+                          bg: const Color(0xFFF5F3FF),
+                          textColor: const Color(0xFF6D28D9),
+                          borderColor: const Color(0xFFDDD6FE),
+                        );
+                      }).toList(),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 24),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPersonalizationSection({
+    required IconData icon,
+    required Color iconColor,
+    required Color iconBg,
+    required String title,
+    required Widget content,
+  }) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFEDF2F7)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(5),
+                decoration: BoxDecoration(
+                  color: iconBg,
+                  borderRadius: BorderRadius.circular(7),
+                ),
+                child: Icon(icon, size: 15, color: iconColor),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                title,
+                style: GoogleFonts.lexend(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: const Color(0xFF334155),
                 ),
               ),
             ],
           ),
-          Container(
-            width: double.infinity,
-            margin: const EdgeInsets.all(12),
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              boxShadow: [
-                BoxShadow(blurRadius: 10, color: Colors.black.withValues(alpha: 0.1)),
-              ],
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  "Thông tin thể chất",
-                  style: TextStyle(
-                    fontSize: 16,
-                    color: Colors.green,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const SizedBox(height: 12),
-                Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    border: Border.all(width: 1, color: Colors.grey.shade400),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                    children: [
-                      Column(
-                        children: [
-                          const Row(
-                            children: [
-                              Icon(
-                                Icons.straighten_outlined,
-                                color: Colors.grey,
-                                size: 18,
-                              ),
-                              SizedBox(width: 4),
-                              Text(
-                                "Chiều cao",
-                                style: TextStyle(color: Colors.grey),
-                              ),
-                            ],
-                          ),
-                          Text(
-                            _height > 0 ? "$_height cm" : "Chưa cập nhật",
-                            style: const TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ],
-                      ),
-                      Container(
-                        width: 1,
-                        height: 40,
-                        color: Colors.grey.shade300,
-                      ),
-                      Column(
-                        children: [
-                          const Row(
-                            children: [
-                              Icon(
-                                Icons.monitor_weight_rounded,
-                                color: Colors.grey,
-                                size: 18,
-                              ),
-                              SizedBox(width: 4),
-                              Text(
-                                "Cân nặng",
-                                style: TextStyle(color: Colors.grey),
-                              ),
-                            ],
-                          ),
-                          Text(
-                            _weight > 0 ? "$_weight kg" : "Chưa cập nhật",
-                            style: const TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 12),
-                const Text(
-                  "Cá nhân hóa",
-                  style: TextStyle(
-                    fontSize: 16,
-                    color: Colors.green,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const SizedBox(height: 12),
-                Container(
-                  width: double.infinity,
-                  height: 1,
-                  color: Colors.grey.shade400,
-                ),
-                const SizedBox(height: 12),
-                const Row(
-                  children: [
-                    Icon(Icons.location_on_sharp),
-                    SizedBox(width: 4),
-                    Text(
-                      "Vị trí yêu thích",
-                      style: TextStyle(fontWeight: FontWeight.bold),
-                    ),
-                  ],
-                ),
-                const Text("        Hà Nội: Bắc Từ Liêm"),
-                const SizedBox(height: 8),
-                const Row(
-                  children: [
-                    Icon(Icons.emoji_events),
-                    SizedBox(width: 4),
-                    Text(
-                      "Môn thể thao",
-                      style: TextStyle(fontWeight: FontWeight.bold),
-                    ),
-                  ],
-                ),
-                const Text("        Cầu lông, Bóng đá"),
-                const SizedBox(height: 12),
-                const Row(
-                  children: [
-                    Icon(Icons.track_changes_rounded),
-                    SizedBox(width: 4),
-                    Text(
-                      "Mục tiêu",
-                      style: TextStyle(fontWeight: FontWeight.bold),
-                    ),
-                  ],
-                ),
-                const Text("        Giao lưu & kết nối, luyện tập"),
-                const SizedBox(height: 8),
-                const Row(
-                  children: [
-                    Icon(Icons.calendar_month),
-                    SizedBox(width: 4),
-                    Text(
-                      "Tần suất chơi",
-                      style: TextStyle(fontWeight: FontWeight.bold),
-                    ),
-                  ],
-                ),
-                const Text("        🌟Khi có thời gian rảnh, 🌤️Chiều, 🌙Tối"),
-                const SizedBox(height: 8),
-              ],
+          const SizedBox(height: 9),
+          content,
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTagBadge({
+    required String label,
+    IconData? icon,
+    required Color bg,
+    required Color textColor,
+    required Color borderColor,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: borderColor, width: 1),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (icon != null) ...[
+            Icon(icon, size: 13, color: textColor),
+            const SizedBox(width: 5),
+          ],
+          Text(
+            label,
+            style: GoogleFonts.lexend(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: textColor,
             ),
           ),
         ],
       ),
     );
+  }
+
+  IconData _getSportIcon(String sport) {
+    final s = sport.toLowerCase();
+    if (s.contains('cầu lông')) return Icons.sports_tennis_rounded;
+    if (s.contains('bóng đá')) return Icons.sports_soccer_rounded;
+    if (s.contains('pickleball')) return Icons.sports_baseball_rounded;
+    if (s.contains('tennis')) return Icons.sports_tennis_outlined;
+    if (s.contains('bóng rổ')) return Icons.sports_basketball_rounded;
+    if (s.contains('bóng chuyền')) return Icons.sports_volleyball_rounded;
+    return Icons.sports_score_rounded;
   }
 
   Widget _buildInfoCard(String title, String value, IconData icon) {
@@ -442,15 +726,22 @@ class _ProfileDetailPageState extends State<ProfileDetailPage> {
         Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(icon, size: 18, color: Colors.grey),
+            Icon(icon, size: 15, color: AppColors.primary),
             const SizedBox(width: 4),
-            Text(title, style: const TextStyle(fontSize: 13, color: Colors.grey)),
+            Text(
+              title,
+              style: GoogleFonts.lexend(fontSize: 11, color: Colors.grey.shade600),
+            ),
           ],
         ),
-        const SizedBox(height: 4),
+        const SizedBox(height: 3),
         Text(
           value,
-          style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
+          style: GoogleFonts.lexend(
+            fontSize: 13,
+            fontWeight: FontWeight.bold,
+            color: AppColors.onBackground,
+          ),
         ),
       ],
     );

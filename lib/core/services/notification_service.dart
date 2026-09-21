@@ -421,6 +421,59 @@ class NotificationService {
     }
   }
 
+  Future<void> showEventBookingSuccessNotification({
+    required String bookingId,
+    required String eventTitle,
+    required String courtName,
+    required String timeRange,
+    required int ticketCount,
+  }) async {
+    final notificationId = bookingId.hashCode & 0x7FFFFFFF;
+    final title = 'Đặt vé sự kiện thành công! 🎉';
+    final body = 'Bạn đã đặt $ticketCount vé sự kiện "$eventTitle" ($courtName $timeRange) thành công. Hẹn gặp bạn tại sự kiện!';
+    
+    await showNotification(
+      id: notificationId,
+      title: title,
+      body: body,
+      payload: jsonEncode({'route': '/BookedCourtPage'}),
+    );
+  }
+
+  Future<void> notifyOwnerNewEventBooking({
+    required String bookingId,
+    required String eventId,
+    required String eventTitle,
+    required String customerName,
+    required int ticketCount,
+    required double totalAmount,
+  }) async {
+    try {
+      final supabase = Supabase.instance.client;
+      final eventResp = await supabase
+          .from('events')
+          .select('venues(owner_id, user_id)')
+          .eq('id', eventId)
+          .maybeSingle();
+
+      final venue = eventResp?['venues'];
+      final ownerId = venue?['owner_id'] ?? venue?['user_id'];
+      if (ownerId != null) {
+        final formattedPrice = '${totalAmount.toInt().toString().replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (m) => '${m[1]}.')} đ';
+        
+        await supabase.from('notifications').insert({
+          'user_id': ownerId,
+          'title': 'Có khách mua vé sự kiện! 🎟️',
+          'body': 'Khách $customerName vừa mua $ticketCount vé sự kiện "$eventTitle". Tổng tiền: $formattedPrice.',
+          'type': 'new_event_booking',
+          'created_at': DateTime.now().toIso8601String(),
+        });
+      }
+    } catch (e) {
+      debugPrint('Lỗi gửi thông báo cho chủ sân khi có vé sự kiện: $e');
+    }
+  }
+
   Future<void> showBookingCancelledNotification({
     required String bookingId,
     required String venueName,

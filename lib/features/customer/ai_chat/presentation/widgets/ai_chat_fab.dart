@@ -39,7 +39,7 @@ class _AiChatFabState extends State<AiChatFab> with SingleTickerProviderStateMix
           shape: BoxShape.circle,
           boxShadow: [
             BoxShadow(
-              color: const Color(0xFF006D38).withOpacity(0.4),
+              color: const Color(0xFF006D38).withValues(alpha: 0.4),
               blurRadius: 16,
               spreadRadius: 2,
               offset: const Offset(0, 4),

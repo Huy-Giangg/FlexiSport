@@ -13,7 +13,9 @@ class MatchmakingPostModel extends MatchmakingPost {
     required super.status,
     required super.createdAt,
     super.hostName,
+    super.venueId,
     super.venueName,
+    super.venueAddress,
     super.courtName,
     super.sportType,
     super.bookingDate,
@@ -29,7 +31,9 @@ class MatchmakingPostModel extends MatchmakingPost {
     
     String? bookingDate;
     String? bookingTime;
+    String? venueId;
     String? venueName;
+    String? venueAddress;
     String? courtName;
     String? sportType;
 
@@ -41,7 +45,9 @@ class MatchmakingPostModel extends MatchmakingPost {
       courtName = courtData?['name'] as String?;
 
       final venueData = courtData?['venues'] as Map<String, dynamic>?;
+      venueId = venueData?['id']?.toString() ?? courtData?['venue_id']?.toString();
       venueName = venueData?['name'] as String?;
+      venueAddress = venueData?['address'] as String?;
       sportType = venueData?['sports_type'] as String?;
 
       final List<int> indices = slotsList
@@ -65,7 +71,9 @@ class MatchmakingPostModel extends MatchmakingPost {
           ? DateTime.parse(json['created_at'] as String) 
           : DateTime.now(),
       hostName: hostName,
+      venueId: venueId,
       venueName: venueName,
+      venueAddress: venueAddress,
       courtName: courtName,
       sportType: sportType,
       bookingDate: bookingDate,

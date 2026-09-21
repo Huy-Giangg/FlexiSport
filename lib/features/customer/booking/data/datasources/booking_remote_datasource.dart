@@ -141,7 +141,12 @@ class BookingRemoteDatasource {
         final eventDateStr = ev['event_date']?.toString() ?? '';
         final startTimeStr = ev['start_time']?.toString() ?? '15:00';
         final endTimeStr = ev['end_time']?.toString() ?? '22:00';
-        final minTickets = (ev['min_tickets'] as num?)?.toInt() ?? 2;
+        int minTickets = (ev['min_tickets'] as num?)?.toInt() ?? 0;
+        if (minTickets <= 0) {
+          final d = ev['description']?.toString() ?? '';
+          final match = RegExp(r'\[min_tickets:\s*(\d+)\]').firstMatch(d);
+          minTickets = match != null ? (int.tryParse(match.group(1) ?? '') ?? 2) : 2;
+        }
 
         bool shouldCancel = false;
         bool isExpired = false;

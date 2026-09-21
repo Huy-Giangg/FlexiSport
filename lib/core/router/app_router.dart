@@ -169,7 +169,10 @@ class AppRouter {
                   body: Center(child: CircularProgressIndicator(color: Color(0xFF006D38))),
                 );
               }
-              final args = extra as PaymentConfirmArgs;
+              final args  
+              
+              
+               = extra as PaymentConfirmArgs;
               return PaymentConfirmPage(args: args);
             },
           ),
@@ -289,8 +292,19 @@ class AppRouter {
             path: '/CreateMatchmakingPage',
             name: 'CreateMatchmakingPage',
             builder: (context, state) {
-              final bookingId = state.extra as String;
-              return CreateMatchmakingPage(bookingId: bookingId);
+              final extra = state.extra;
+              String bookingId = '';
+              Map<String, dynamic>? initialBookingData;
+              if (extra is String) {
+                bookingId = extra;
+              } else if (extra is Map<String, dynamic>) {
+                bookingId = extra['id']?.toString() ?? '';
+                initialBookingData = extra;
+              }
+              return CreateMatchmakingPage(
+                bookingId: bookingId,
+                initialBookingData: initialBookingData,
+              );
             },
           ),
 

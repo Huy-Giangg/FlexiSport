@@ -52,3 +52,6 @@ app.*.map.json
 
 # App configuration secrets
 lib/core/config/app_config.dart
+
+# Standalone services / sub-projects
+chatbot-sports/

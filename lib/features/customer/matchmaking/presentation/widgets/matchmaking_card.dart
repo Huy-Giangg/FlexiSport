@@ -34,6 +34,9 @@ class MatchmakingCard extends StatelessWidget {
       } else if (userRequest.status == 'approved') {
         requestStatusText = 'Đã nhận';
         requestStatusColor = Colors.green;
+      } else if (userRequest.status == 'cancel_requested' || userRequest.status == 'pending_cancel') {
+        requestStatusText = 'Chờ duyệt hủy';
+        requestStatusColor = Colors.deepOrange;
       } else if (userRequest.status == 'rejected') {
         requestStatusText = 'Bị từ chối';
         requestStatusColor = Colors.red;
@@ -84,9 +87,9 @@ class MatchmakingCard extends StatelessWidget {
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                     decoration: BoxDecoration(
-                      color: requestStatusColor.withOpacity(0.1),
+                      color: requestStatusColor.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: requestStatusColor.withOpacity(0.3)),
+                      border: Border.all(color: requestStatusColor.withValues(alpha: 0.3)),
                     ),
                     child: Text(
                       requestStatusText,
@@ -195,52 +198,83 @@ class MatchmakingCard extends StatelessWidget {
                   ? Row(
                       children: [
                         Expanded(
-                          child: OutlinedButton(
-                            onPressed: () {
-                              showDialog(
-                                context: context,
-                                builder: (dialogContext) => AlertDialog(
-                                  title: const Text('Hủy đăng kèo'),
-                                  content: const Text(
-                                      'Bạn có chắc chắn muốn hủy đăng kèo ghép này không?'),
-                                  actions: [
-                                    TextButton(
-                                      onPressed: () => Navigator.pop(dialogContext),
-                                      child: const Text('Không'),
-                                    ),
-                                    TextButton(
-                                      onPressed: () {
-                                        Navigator.pop(dialogContext);
-                                        context
-                                            .read<MatchmakingProvider>()
-                                            .cancelPost(post.id)
-                                            .then((_) {
-                                          if (context.mounted) {
-                                            ScaffoldMessenger.of(context).showSnackBar(
-                                              const SnackBar(
-                                                  content: Text(
-                                                      'Đã hủy đăng kèo thành công')),
-                                            );
-                                          }
-                                        });
-                                      },
-                                      child: const Text(
-                                        'Có, Hủy',
-                                        style: TextStyle(color: Colors.red),
+                          child: Builder(
+                            builder: (context) {
+                              final hasAcceptedParticipants = post.slotsAvailable < post.slotsNeeded;
+
+                              return OutlinedButton(
+                                onPressed: () {
+                                  if (hasAcceptedParticipants) {
+                                    showDialog(
+                                      context: context,
+                                      builder: (dialogContext) => AlertDialog(
+                                        title: const Text('Không thể hủy kèo'),
+                                        content: Text(
+                                          'Kèo ghép này đã có người tham gia được duyệt (${post.slotsNeeded - post.slotsAvailable}/${post.slotsNeeded} chỗ).\n\nBạn chỉ có thể hủy kèo khi không còn người tham gia nào trong kèo.',
+                                        ),
+                                        actions: [
+                                          TextButton(
+                                            onPressed: () => Navigator.pop(dialogContext),
+                                            child: const Text('Đã hiểu'),
+                                          ),
+                                        ],
                                       ),
+                                    );
+                                    return;
+                                  }
+
+                                  showDialog(
+                                    context: context,
+                                    builder: (dialogContext) => AlertDialog(
+                                      title: const Text('Hủy đăng kèo'),
+                                      content: const Text(
+                                          'Bạn có chắc chắn muốn hủy đăng kèo ghép này không?'),
+                                      actions: [
+                                        TextButton(
+                                          onPressed: () => Navigator.pop(dialogContext),
+                                          child: const Text('Không'),
+                                        ),
+                                        TextButton(
+                                          onPressed: () {
+                                            Navigator.pop(dialogContext);
+                                            context
+                                                .read<MatchmakingProvider>()
+                                                .cancelPost(post.id)
+                                                .then((_) {
+                                              if (context.mounted) {
+                                                ScaffoldMessenger.of(context).showSnackBar(
+                                                  const SnackBar(
+                                                      content: Text(
+                                                          'Đã hủy đăng kèo thành công')),
+                                                );
+                                              }
+                                            }).catchError((err) {
+                                              if (context.mounted) {
+                                                ScaffoldMessenger.of(context).showSnackBar(
+                                                  SnackBar(content: Text('Lỗi: $err')),
+                                                );
+                                              }
+                                            });
+                                          },
+                                          child: const Text(
+                                            'Có, Hủy',
+                                            style: TextStyle(color: Colors.red),
+                                          ),
+                                        ),
+                                      ],
                                     ),
-                                  ],
+                                  );
+                                },
+                                style: OutlinedButton.styleFrom(
+                                  foregroundColor: hasAcceptedParticipants ? Colors.grey.shade500 : Colors.red,
+                                  side: BorderSide(color: hasAcceptedParticipants ? Colors.grey.shade300 : Colors.red),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
                                 ),
+                                child: const Text('Hủy Đăng Kèo'),
                               );
                             },
-                            style: OutlinedButton.styleFrom(
-                              foregroundColor: Colors.red,
-                              side: const BorderSide(color: Colors.red),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                            ),
-                            child: const Text('Hủy Đăng Kèo'),
                           ),
                         ),
                         const SizedBox(width: 8),

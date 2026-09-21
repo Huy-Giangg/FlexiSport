@@ -14,7 +14,12 @@ abstract class MatchmakingRepository {
 
   Future<void> submitMatchmakingRequest(MatchmakingRequest request);
 
-  Future<void> updateRequestStatus(String requestId, String status);
+  Future<void> updateRequestStatus(
+    String requestId,
+    String status, {
+    String? postId,
+    bool? wasApproved,
+  });
 
   Future<void> updatePostStatus(String postId, String status);
 

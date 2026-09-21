@@ -45,7 +45,7 @@ class _OwnerEventManagementPageState extends State<OwnerEventManagementPage> {
         (courtProvider.venues.isNotEmpty ? courtProvider.venues.first : null);
 
     if (venue != null) {
-      eventProvider.setVenue(venue);
+      eventProvider.setVenue(venue, forceReload: true);
     }
   }
 
@@ -361,9 +361,14 @@ class _OwnerEventManagementPageState extends State<OwnerEventManagementPage> {
           ),
         ),
       ),
-      actions: const [
-        OwnerNotificationIcon(),
-        SizedBox(width: 12),
+      actions: [
+        IconButton(
+          tooltip: "Làm mới danh sách",
+          icon: const Icon(Icons.refresh_rounded, color: AppColors.primary),
+          onPressed: () => eventProvider.refreshEvents(),
+        ),
+        const OwnerNotificationIcon(),
+        const SizedBox(width: 8),
       ],
     );
   }

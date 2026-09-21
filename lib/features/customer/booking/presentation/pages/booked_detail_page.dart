@@ -192,9 +192,16 @@ class _BookedDetailPageState extends State<BookedDetailPage> {
 
   String _formatDate(String dateStr) {
     try {
-      final parts = dateStr.split('-');
+      final clean = dateStr.split('T')[0].split(' ')[0].trim();
+      final parts = clean.split('-');
       if (parts.length == 3) {
         return "${parts[2]}/${parts[1]}/${parts[0]}";
+      }
+      final parsed = DateTime.tryParse(dateStr);
+      if (parsed != null) {
+        final d = parsed.day.toString().padLeft(2, '0');
+        final m = parsed.month.toString().padLeft(2, '0');
+        return "$d/$m/${parsed.year}";
       }
     } catch (_) {}
     return dateStr;

@@ -130,9 +130,19 @@ class _CourtDetailConfigSheetState extends State<CourtDetailConfigSheet> {
   Future<void> _saveAllChanges() async {
     if (!(_formKey.currentState?.validate() ?? false)) return;
 
+    final normalPrice = _parseInputPrice(_normalPriceController.text, widget.court.pricePerHour);
+    if (normalPrice < 50000 || normalPrice > 300000) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("Giá thuê sân (giờ thường) phải từ 50.000đ đến 300.000đ/giờ"),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
     setState(() => _isSaving = true);
     final name = _nameController.text.trim();
-    final normalPrice = _parseInputPrice(_normalPriceController.text, widget.court.pricePerHour);
     final peakPrice = _parseInputPrice(_peakPriceController.text, normalPrice * 1.3);
     final weekendSurcharge = _parseInputPrice(_weekendSurchargeController.text, 20000.0);
 

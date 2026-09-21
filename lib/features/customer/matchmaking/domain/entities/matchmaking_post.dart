@@ -11,7 +11,9 @@ class MatchmakingPost {
   final DateTime createdAt;
 
   final String? hostName;
+  final String? venueId;
   final String? venueName;
+  final String? venueAddress;
   final String? courtName;
   final String? sportType;
   final String? bookingDate;
@@ -29,7 +31,9 @@ class MatchmakingPost {
     required this.status,
     required this.createdAt,
     this.hostName,
+    this.venueId,
     this.venueName,
+    this.venueAddress,
     this.courtName,
     this.sportType,
     this.bookingDate,

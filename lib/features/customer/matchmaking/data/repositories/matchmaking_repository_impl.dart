@@ -61,8 +61,18 @@ class MatchmakingRepositoryImpl implements MatchmakingRepository {
   }
 
   @override
-  Future<void> updateRequestStatus(String requestId, String status) async {
-    await remoteDatasource.updateRequestStatus(requestId, status);
+  Future<void> updateRequestStatus(
+    String requestId,
+    String status, {
+    String? postId,
+    bool? wasApproved,
+  }) async {
+    await remoteDatasource.updateRequestStatus(
+      requestId,
+      status,
+      postId: postId,
+      wasApproved: wasApproved,
+    );
   }
 
   @override

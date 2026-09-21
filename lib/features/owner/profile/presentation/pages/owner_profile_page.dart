@@ -1127,13 +1127,14 @@ class _OwnerProfilePageState extends State<OwnerProfilePage> {
                       children: [
                         // Profile Card
                         InkWell(
-                          onTap: () {
-                            Navigator.of(context).push(
+                          onTap: () async {
+                            await Navigator.of(context).push(
                               MaterialPageRoute(
                                 builder: (context) =>
                                     const OwnerProfileDetailPage(),
                               ),
                             );
+                            await _loadProfile();
                           },
                           child: Container(
                             padding: const EdgeInsets.all(16),

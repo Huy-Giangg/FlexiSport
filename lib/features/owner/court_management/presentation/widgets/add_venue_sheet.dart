@@ -188,57 +188,85 @@ class _AddVenueSheetState extends State<AddVenueSheet> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text(
-                "Chọn hình ảnh cơ sở / sân",
-                style: GoogleFonts.lexend(fontSize: 16, fontWeight: FontWeight.bold),
+              Container(
+                width: 40,
+                height: 4,
+                margin: const EdgeInsets.only(bottom: 16),
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade300,
+                  borderRadius: BorderRadius.circular(2),
+                ),
               ),
-              const SizedBox(height: 16),
+              Text(
+                "Tải ảnh cơ sở / sân lên",
+                style: GoogleFonts.lexend(fontSize: 18, fontWeight: FontWeight.bold, color: const Color(0xFF1E293B)),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                "Chọn hình ảnh từ thiết bị hoặc chụp ảnh mới",
+                style: GoogleFonts.lexend(fontSize: 13, color: Colors.grey.shade600),
+              ),
+              const SizedBox(height: 20),
               ListTile(
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                tileColor: const Color(0xFFF8FAFC),
                 leading: Container(
-                  padding: const EdgeInsets.all(8),
+                  padding: const EdgeInsets.all(10),
                   decoration: BoxDecoration(
-                    color: AppColors.primary.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(10),
+                    color: AppColors.primary.withValues(alpha: 0.12),
+                    shape: BoxShape.circle,
                   ),
                   child: const Icon(Icons.photo_library_rounded, color: AppColors.primary),
                 ),
-                title: Text("Chọn từ Thư viện", style: GoogleFonts.lexend(fontSize: 14)),
+                title: Text("Chọn từ Thư viện", style: GoogleFonts.lexend(fontSize: 15, fontWeight: FontWeight.w600)),
+                subtitle: Text("Hiển thị đầy đủ ảnh trong thiết bị của bạn", style: GoogleFonts.lexend(fontSize: 12, color: Colors.grey.shade600)),
+                trailing: const Icon(Icons.chevron_right_rounded, color: Colors.grey),
                 onTap: () {
                   Navigator.of(ctx).pop();
                   _pickImage(ImageSource.gallery);
                 },
               ),
+              const SizedBox(height: 10),
               ListTile(
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                tileColor: const Color(0xFFF8FAFC),
                 leading: Container(
-                  padding: const EdgeInsets.all(8),
+                  padding: const EdgeInsets.all(10),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF0288D1).withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(10),
+                    color: const Color(0xFF0288D1).withValues(alpha: 0.12),
+                    shape: BoxShape.circle,
                   ),
                   child: const Icon(Icons.camera_alt_rounded, color: Color(0xFF0288D1)),
                 ),
-                title: Text("Chụp ảnh mới", style: GoogleFonts.lexend(fontSize: 14)),
+                title: Text("Chụp ảnh mới", style: GoogleFonts.lexend(fontSize: 15, fontWeight: FontWeight.w600)),
+                subtitle: Text("Sử dụng camera để chụp ảnh cơ sở ngay", style: GoogleFonts.lexend(fontSize: 12, color: Colors.grey.shade600)),
+                trailing: const Icon(Icons.chevron_right_rounded, color: Colors.grey),
                 onTap: () {
                   Navigator.of(ctx).pop();
                   _pickImage(ImageSource.camera);
                 },
               ),
-              if (_selectedImage != null)
+              if (_selectedImage != null) ...[
+                const SizedBox(height: 10),
                 ListTile(
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  tileColor: Colors.red.shade50.withValues(alpha: 0.5),
                   leading: Container(
-                    padding: const EdgeInsets.all(8),
+                    padding: const EdgeInsets.all(10),
                     decoration: BoxDecoration(
-                      color: Colors.red.withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(10),
+                      color: Colors.red.withValues(alpha: 0.12),
+                      shape: BoxShape.circle,
                     ),
                     child: const Icon(Icons.delete_outline_rounded, color: Colors.red),
                   ),
-                  title: Text("Xóa ảnh đã chọn", style: GoogleFonts.lexend(fontSize: 14, color: Colors.red)),
+                  title: Text("Xóa ảnh đã chọn", style: GoogleFonts.lexend(fontSize: 15, fontWeight: FontWeight.w600, color: Colors.red)),
+                  subtitle: Text("Gỡ bỏ ảnh cơ sở đã chọn", style: GoogleFonts.lexend(fontSize: 12, color: Colors.grey.shade600)),
                   onTap: () {
                     Navigator.of(ctx).pop();
                     setState(() => _selectedImage = null);
                   },
                 ),
+              ],
             ],
           ),
         ),

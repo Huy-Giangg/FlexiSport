@@ -1,6 +1,7 @@
 import 'package:flexisport_app/core/theme/app_colors.dart';
 import 'package:flexisport_app/features/owner/court_management/domain/entities/owner_court_entity.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 class AddEditCourtDialog extends StatefulWidget {
@@ -255,6 +256,10 @@ class _AddEditCourtDialogState extends State<AddEditCourtDialog> {
               TextFormField(
                 controller: _priceController,
                 keyboardType: TextInputType.number,
+                inputFormatters: [
+                  FilteringTextInputFormatter.digitsOnly,
+                  LengthLimitingTextInputFormatter(7),
+                ],
                 style: GoogleFonts.lexend(fontSize: 14, fontWeight: FontWeight.bold),
                 decoration: InputDecoration(
                   hintText: "150000",
@@ -265,6 +270,8 @@ class _AddEditCourtDialogState extends State<AddEditCourtDialog> {
                     fontWeight: FontWeight.bold,
                     color: AppColors.primaryContainer,
                   ),
+                  helperText: "Giới hạn từ 50.000đ đến 300.000đ / giờ",
+                  helperStyle: GoogleFonts.lexend(fontSize: 11, color: Colors.grey.shade600),
                   filled: true,
                   fillColor: const Color(0xFFF9FAFB),
                   border: OutlineInputBorder(
@@ -279,14 +286,28 @@ class _AddEditCourtDialogState extends State<AddEditCourtDialog> {
                     borderRadius: BorderRadius.circular(14),
                     borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
                   ),
+                  errorBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    borderSide: const BorderSide(color: Colors.red, width: 1),
+                  ),
+                  focusedErrorBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    borderSide: const BorderSide(color: Colors.red, width: 1.5),
+                  ),
                 ),
                 validator: (val) {
                   if (val == null || val.trim().isEmpty) {
                     return 'Vui lòng nhập giá thuê';
                   }
                   final p = double.tryParse(val.replaceAll('.', '').replaceAll(',', '').trim());
-                  if (p == null || p < 0) {
+                  if (p == null) {
                     return 'Giá tiền không hợp lệ';
+                  }
+                  if (p < 50000) {
+                    return 'Giá thuê tối thiểu là 50.000đ/giờ';
+                  }
+                  if (p > 300000) {
+                    return 'Giá thuê tối đa là 300.000đ/giờ';
                   }
                   return null;
                 },

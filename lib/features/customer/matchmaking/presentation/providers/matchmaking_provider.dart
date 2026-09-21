@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flexisport_app/features/customer/matchmaking/domain/entities/matchmaking_post.dart';
 import 'package:flexisport_app/features/customer/matchmaking/domain/entities/matchmaking_request.dart';
 import 'package:flexisport_app/features/customer/matchmaking/domain/repositories/matchmaking_repository.dart';
@@ -93,9 +94,19 @@ class MatchmakingProvider extends ChangeNotifier {
     }
   }
 
-  Future<void> respondToRequest(String requestId, String status, String postId) async {
+  Future<void> respondToRequest(
+    String requestId,
+    String status,
+    String postId, {
+    bool? wasApproved,
+  }) async {
     try {
-      await repository.updateRequestStatus(requestId, status);
+      await repository.updateRequestStatus(
+        requestId,
+        status,
+        postId: postId,
+        wasApproved: wasApproved,
+      );
       await loadRequests(postId);
       await loadPosts(); // Cập nhật lại số lượng slot trống của các kèo
       
@@ -122,6 +133,35 @@ class MatchmakingProvider extends ChangeNotifier {
     } catch (e) {
       _errorMessage = e.toString();
       notifyListeners();
+      rethrow;
+    }
+  }
+
+  /// Người xin kèo gửi yêu cầu hủy tham gia / rút yêu cầu (cần chủ kèo xác nhận)
+  Future<void> requestCancelParticipation(
+    String requestId,
+    String postId, {
+    required bool wasApproved,
+  }) async {
+    try {
+      final newStatus = wasApproved ? 'cancel_requested' : 'pending_cancel';
+      await repository.updateRequestStatus(
+        requestId,
+        newStatus,
+        postId: postId,
+        wasApproved: wasApproved,
+      );
+      await loadRequests(postId);
+      await loadPosts();
+
+      final currentUserId = Supabase.instance.client.auth.currentUser?.id;
+      if (currentUserId != null) {
+        await loadUserRequests(currentUserId);
+      }
+    } catch (e) {
+      _errorMessage = e.toString();
+      notifyListeners();
+      rethrow;
     }
   }
 
@@ -135,6 +175,7 @@ class MatchmakingProvider extends ChangeNotifier {
       _errorMessage = e.toString();
       _isLoading = false;
       notifyListeners();
+      rethrow;
     }
   }
 }

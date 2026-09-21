@@ -1,9 +1,15 @@
+import 'dart:io' show Platform;
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:flexisport_app/core/config/app_config.dart';
 
 class AuthService {
   final GoTrueClient _auth = Supabase.instance.client.auth;
-  final GoogleSignIn _googleSignIn = GoogleSignIn();
+  final GoogleSignIn _googleSignIn = GoogleSignIn(
+    serverClientId: AppConfig.googleWebClientId,
+    clientId: (!kIsWeb && Platform.isIOS) ? AppConfig.googleIosClientId : null,
+  );
 
   // Hàm đăng ký tài khoản mới
   Future<User?> registerWithEmail(
@@ -73,6 +79,11 @@ class AuthService {
 
   Future<User?> signInWithGoogle() async {
     try {
+      // Đăng xuất session Google cũ nếu có để luôn hiển thị màn hình chọn tài khoản
+      try {
+        await _googleSignIn.signOut();
+      } catch (_) {}
+
       final googleUser = await _googleSignIn.signIn();
       if (googleUser == null) return null;
 
@@ -80,8 +91,8 @@ class AuthService {
       final accessToken = googleAuth.accessToken;
       final idToken = googleAuth.idToken;
 
-      if (accessToken == null || idToken == null) {
-        throw 'Không lấy được thông tin xác thực từ Google.';
+      if (idToken == null) {
+        throw 'Không lấy được thông tin xác thực (ID Token) từ Google. Vui lòng kiểm tra cấu hình tài khoản.';
       }
 
       final AuthResponse response = await _auth.signInWithIdToken(
@@ -101,6 +112,7 @@ class AuthService {
       throw 'Lỗi kết nối Google: ${e.toString()}';
     }
   }
+
 
   Future<void> resetPassword(String email) async {
     try {

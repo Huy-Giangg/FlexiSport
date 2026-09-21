@@ -66,8 +66,6 @@ class _HomeState extends State<Home> {
     final entries = listIcon.entries.toList();
     final double topPadding = MediaQuery.of(context).padding.top;
 
-    bool isSelected = false;
-
     return Scaffold(
       body: RefreshIndicator(
         edgeOffset: topPadding + 175,

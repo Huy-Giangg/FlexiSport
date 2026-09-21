@@ -1,4 +1,6 @@
+import 'package:flexisport_app/features/auth/utils/validators.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flexisport_app/core/theme/app_colors.dart';
@@ -33,6 +35,7 @@ class _EditOwnerProfileDialogState extends State<EditOwnerProfileDialog> {
   final _formKey = GlobalKey<FormState>();
   late final TextEditingController _nameController;
   late final TextEditingController _phoneController;
+  late final TextEditingController _emailController;
   bool _isSaving = false;
 
   @override
@@ -46,15 +49,18 @@ class _EditOwnerProfileDialogState extends State<EditOwnerProfileDialog> {
     final currentPhone = widget.initialData?['phone']?.toString() ??
         user?.userMetadata?['phone'] as String? ??
         '';
+    final currentEmail = user?.email ?? widget.initialData?['email']?.toString() ?? '';
 
     _nameController = TextEditingController(text: currentName);
     _phoneController = TextEditingController(text: currentPhone);
+    _emailController = TextEditingController(text: currentEmail);
   }
 
   @override
   void dispose() {
     _nameController.dispose();
     _phoneController.dispose();
+    _emailController.dispose();
     super.dispose();
   }
 
@@ -97,7 +103,7 @@ class _EditOwnerProfileDialogState extends State<EditOwnerProfileDialog> {
         widget.onSaved();
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text("Cập nhật thông tin thành công!", style: GoogleFonts.lexend()),
+            content: Text("Cập nhật thông tin chủ sân thành công!", style: GoogleFonts.lexend()),
             backgroundColor: AppColors.primary,
           ),
         );
@@ -173,11 +179,35 @@ class _EditOwnerProfileDialogState extends State<EditOwnerProfileDialog> {
               ),
               const SizedBox(height: 16),
 
+              // Email (Read only)
+              TextFormField(
+                controller: _emailController,
+                readOnly: true,
+                style: GoogleFonts.lexend(fontSize: 14, color: Colors.grey.shade600),
+                decoration: InputDecoration(
+                  labelText: "Email tài khoản",
+                  prefixIcon: const Icon(Icons.email_outlined, color: Colors.grey),
+                  suffixIcon: const Icon(Icons.lock_outline, color: Colors.grey, size: 18),
+                  filled: true,
+                  fillColor: Colors.grey.shade100,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    borderSide: BorderSide(color: Colors.grey.shade300),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    borderSide: BorderSide(color: Colors.grey.shade200),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 14),
+
+              // Full Name
               TextFormField(
                 controller: _nameController,
                 style: GoogleFonts.lexend(fontSize: 14),
                 decoration: InputDecoration(
-                  labelText: "Họ và tên *",
+                  labelText: "Họ và tên chủ sân *",
                   prefixIcon: const Icon(Icons.badge_outlined, color: AppColors.primary),
                   filled: true,
                   fillColor: const Color(0xFFF9FAFB),
@@ -185,17 +215,40 @@ class _EditOwnerProfileDialogState extends State<EditOwnerProfileDialog> {
                     borderRadius: BorderRadius.circular(14),
                     borderSide: BorderSide(color: Colors.grey.shade300),
                   ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    borderSide: BorderSide(color: Colors.grey.shade300),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
+                  ),
+                  errorMaxLines: 2,
+                  errorStyle: GoogleFonts.lexend(fontSize: 11.5),
                 ),
-                validator: (val) => val == null || val.trim().isEmpty ? "Vui lòng nhập họ tên" : null,
+                validator: (val) {
+                  if (val == null || val.trim().isEmpty) {
+                    return "Vui lòng nhập họ và tên";
+                  }
+                  if (val.trim().length < 2) {
+                    return "Tên quá ngắn";
+                  }
+                  return null;
+                },
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 14),
 
+              // Phone
               TextFormField(
                 controller: _phoneController,
                 keyboardType: TextInputType.phone,
+                inputFormatters: [
+                  FilteringTextInputFormatter.digitsOnly,
+                  LengthLimitingTextInputFormatter(11),
+                ],
                 style: GoogleFonts.lexend(fontSize: 14),
                 decoration: InputDecoration(
-                  labelText: "Số điện thoại *",
+                  labelText: "Số điện thoại liên hệ *",
                   prefixIcon: const Icon(Icons.phone_outlined, color: AppColors.primary),
                   filled: true,
                   fillColor: const Color(0xFFF9FAFB),
@@ -203,8 +256,18 @@ class _EditOwnerProfileDialogState extends State<EditOwnerProfileDialog> {
                     borderRadius: BorderRadius.circular(14),
                     borderSide: BorderSide(color: Colors.grey.shade300),
                   ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    borderSide: BorderSide(color: Colors.grey.shade300),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
+                  ),
+                  errorMaxLines: 2,
+                  errorStyle: GoogleFonts.lexend(fontSize: 11.5),
                 ),
-                validator: (val) => val == null || val.trim().isEmpty ? "Vui lòng nhập số điện thoại" : null,
+                validator: MyValidators.validatePhone,
               ),
               const SizedBox(height: 20),
 

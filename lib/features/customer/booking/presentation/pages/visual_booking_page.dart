@@ -651,56 +651,13 @@ class _VisualBookingPageState extends State<VisualBookingPage> {
                       ),
                     ],
                   ),
-                  Padding(
-                    padding: const EdgeInsets.only(left: 22, top: 4),
-                    child: TextButton(
-                      onPressed: () {},
-                      style: TextButton.styleFrom(padding: EdgeInsets.zero, minimumSize: const Size(0, 0)),
-                      child: const Text(
-                        "Xem sân & bảng giá",
-                        style: TextStyle(
-                          color: Colors.yellowAccent,
-                          decoration: TextDecoration.underline,
-                          decorationColor: Colors.yellowAccent,
-                          decorationThickness: 1.5,
-                          fontSize: 13,
-                        ),
-                      ),
-                    ),
-                  ),
+                  const SizedBox(height: 20,)
                 ],
               ),
             ),
 
-            // Banner lưu ý/cảnh báo màu xanh ngọc nhạt
-            Container(
-              width: double.infinity,
-              color: const Color(0xFFE0F2F1),
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-              child: RichText(
-                text: const TextSpan(
-                  style: TextStyle(fontSize: 14, height: 1.3),
-                  children: [
-                    TextSpan(
-                      text: "Lưu ý: ",
-                      style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold),
-                    ),
-                    TextSpan(
-                      text: "Nếu bạn cần đặt lịch cố định vui lòng liên hệ: ",
-                      style: TextStyle(color: Color(0xFF004D40)),
-                    ),
-                    TextSpan(
-                      text: "0388.533.159",
-                      style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold),
-                    ),
-                    TextSpan(
-                      text: " để được hỗ trợ.",
-                      style: TextStyle(color: Color(0xFF004D40)),
-                    ),
-                  ],
-                ),
-              ),
-            ),
+            const SizedBox(height: 10,),
+
 
             // Banner thông báo nếu toàn bộ cơ sở đang trong thời gian bảo trì
             if (courts.isNotEmpty && courts.every((c) => !c.isActive || c.status == 'maintenance'))

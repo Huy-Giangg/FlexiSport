@@ -40,8 +40,10 @@ class TabInfoWidget extends StatelessWidget {
         _buildInfoRow(Icons.lightbulb, "Chiếu sáng", "Hệ thống đèn LED 1000W"),
         _buildInfoRow(Icons.security, "An ninh", "Camera giám sát 24/7"),
         _buildInfoRow(Icons.directions_car, "Bãi đỗ xe", "Miễn phí ô tô & xe máy"),
+        const SizedBox(height: 50),
       ],
     );
+
   }
 
   Widget _buildInfoRow(IconData icon, String label, String value) {

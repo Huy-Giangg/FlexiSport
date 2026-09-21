@@ -9,12 +9,21 @@ class AiChatRepositoryImpl implements AiChatRepository {
   AiChatRepositoryImpl(this.datasource);
 
   @override
+  Stream<String> askAiStream({
+    required String query,
+    String target = 'auto',
+  }) {
+    return datasource.streamAsk(query: query, target: target);
+  }
+
+  @override
   Future<ChatMessageEntity> sendMessage({
     required String prompt,
     required List<ChatMessageEntity> history,
     required List<SportsComplexEntity> availableVenues,
     double? userLat,
     double? userLng,
+    String target = 'auto',
   }) {
     return datasource.sendMessage(
       prompt: prompt,
@@ -22,7 +31,18 @@ class AiChatRepositoryImpl implements AiChatRepository {
       availableVenues: availableVenues,
       userLat: userLat,
       userLng: userLng,
+      target: target,
     );
+  }
+
+  @override
+  Future<String> getServerUrl() {
+    return datasource.getServerUrl();
+  }
+
+  @override
+  Future<void> saveServerUrl(String url) {
+    return datasource.saveServerUrl(url);
   }
 
   @override
@@ -35,3 +55,4 @@ class AiChatRepositoryImpl implements AiChatRepository {
     return datasource.saveApiKey(apiKey);
   }
 }
+

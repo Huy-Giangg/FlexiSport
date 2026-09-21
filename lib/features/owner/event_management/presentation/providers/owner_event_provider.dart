@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flexisport_app/features/owner/court_management/domain/entities/owner_venue_entity.dart';
 import 'package:flexisport_app/features/owner/event_management/data/datasources/owner_event_remote_datasource.dart';
 import 'package:flexisport_app/features/owner/event_management/domain/entities/owner_event_attendee_entity.dart';
@@ -80,12 +81,54 @@ class OwnerEventProvider extends ChangeNotifier {
     }).toList();
   }
 
-  // --- THAO TÁC DỮ LIỆU ---
+  // --- THAO TÁC DỮ LIỆU & REALTIME ---
+  RealtimeChannel? _bookingSubscription;
+  RealtimeChannel? _eventSubscription;
+  String? _currentViewingEventId;
 
-  void setVenue(OwnerVenueEntity venue) {
-    if (_selectedVenue?.id == venue.id) return;
+  void _setupRealtimeSubscription() {
+    if (_bookingSubscription != null) return;
+    try {
+      _bookingSubscription = Supabase.instance.client
+          .channel('public:owner_event_bookings_channel')
+          .onPostgresChanges(
+            event: PostgresChangeEvent.all,
+            schema: 'public',
+            table: 'event_bookings',
+            callback: (payload) {
+              debugPrint("Realtime event_bookings change detected: ${payload.eventType}");
+              refreshEvents();
+              if (_currentViewingEventId != null) {
+                fetchAttendees(_currentViewingEventId!);
+              }
+            },
+          )
+          .subscribe();
+
+      _eventSubscription = Supabase.instance.client
+          .channel('public:owner_events_channel')
+          .onPostgresChanges(
+            event: PostgresChangeEvent.all,
+            schema: 'public',
+            table: 'events',
+            callback: (payload) {
+              debugPrint("Realtime events change detected: ${payload.eventType}");
+              refreshEvents();
+            },
+          )
+          .subscribe();
+    } catch (e) {
+      debugPrint("Lỗi khởi tạo Realtime OwnerEventProvider: $e");
+    }
+  }
+
+  void setVenue(OwnerVenueEntity venue, {bool forceReload = false}) {
+    final isDifferent = _selectedVenue?.id != venue.id;
     _selectedVenue = venue;
-    loadEvents(venue.id);
+    _setupRealtimeSubscription();
+    if (isDifferent || forceReload) {
+      loadEvents(venue.id);
+    }
   }
 
   Future<void> loadEvents(String venueId) async {
@@ -105,7 +148,13 @@ class OwnerEventProvider extends ChangeNotifier {
 
   Future<void> refreshEvents() async {
     if (_selectedVenue != null) {
-      await loadEvents(_selectedVenue!.id);
+      try {
+        final refreshed = await remoteDataSource.fetchOwnerEvents(_selectedVenue!.id);
+        _events = refreshed;
+        notifyListeners();
+      } catch (e) {
+        debugPrint("Lỗi refreshEvents: $e");
+      }
     }
   }
 
@@ -243,12 +292,27 @@ class OwnerEventProvider extends ChangeNotifier {
 
   // Lấy danh sách người tham gia
   Future<void> fetchAttendees(String eventId) async {
+    _currentViewingEventId = eventId;
     _isLoadingAttendees = true;
-    _attendees = [];
     notifyListeners();
 
     try {
       _attendees = await remoteDataSource.fetchEventAttendees(eventId);
+
+      // Cập nhật ngay tức thì số vé đã bán, doanh thu và số người tham gia của event trong danh sách _events
+      final nonCancelled = _attendees.where((a) => a.status != 'cancelled' && a.status != 'canceled');
+      final newTicketsCount = nonCancelled.fold<int>(0, (sum, a) => sum + a.ticketCount);
+      final newRevenue = nonCancelled.fold<double>(0.0, (sum, a) => sum + a.totalAmount);
+      final newAttendeesCount = nonCancelled.length;
+
+      final index = _events.indexWhere((e) => e.id == eventId);
+      if (index != -1) {
+        _events[index] = _events[index].copyWith(
+          bookedTicketsCount: newTicketsCount,
+          totalRevenue: newRevenue,
+          attendeesCount: newAttendeesCount,
+        );
+      }
     } catch (e) {
       debugPrint("Lỗi fetchAttendees: $e");
       _attendees = [];
@@ -256,5 +320,38 @@ class OwnerEventProvider extends ChangeNotifier {
       _isLoadingAttendees = false;
       notifyListeners();
     }
+  }
+
+  // Cập nhật trạng thái vé của người tham gia (Check-in / Xác nhận thanh toán)
+  Future<bool> updateAttendeeStatus(String bookingId, String newStatus) async {
+    try {
+      final success = await remoteDataSource.updateAttendeeStatus(
+        bookingId: bookingId,
+        status: newStatus,
+      );
+      if (success) {
+        if (_currentViewingEventId != null) {
+          await fetchAttendees(_currentViewingEventId!);
+        }
+        if (_selectedVenue != null) {
+          await refreshEvents();
+        }
+      }
+      return success;
+    } catch (e) {
+      debugPrint("Lỗi updateAttendeeStatus: $e");
+      return false;
+    }
+  }
+
+  void clearViewingEvent() {
+    _currentViewingEventId = null;
+  }
+
+  @override
+  void dispose() {
+    _bookingSubscription?.unsubscribe();
+    _eventSubscription?.unsubscribe();
+    super.dispose();
   }
 }

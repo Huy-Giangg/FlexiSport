@@ -25,36 +25,41 @@ class OwnerEventRemoteDataSource {
 
       if (eventsList.isEmpty) return [];
 
-      final eventIds = eventsList.map((e) => e['id']?.toString() ?? '').toList();
+      final eventIds = eventsList
+          .map((e) => e['id']?.toString() ?? '')
+          .where((id) => id.isNotEmpty)
+          .toList();
 
       // Query event_bookings để tính số vé và doanh thu cho từng event
       final Map<String, int> bookedTicketsMap = {};
       final Map<String, double> revenueMap = {};
       final Map<String, int> attendeesCountMap = {};
 
-      try {
-        final bookingsResponse = await supabaseClient
-            .from('event_bookings')
-            .select()
-            .inFilter('event_id', eventIds);
+      if (eventIds.isNotEmpty) {
+        try {
+          final bookingsResponse = await supabaseClient
+              .from('event_bookings')
+              .select()
+              .inFilter('event_id', eventIds);
 
-        for (final b in bookingsResponse as List<dynamic>) {
-          final eventId = b['event_id']?.toString() ?? '';
-          final status = b['status']?.toString().toLowerCase() ?? 'completed';
+          for (final b in bookingsResponse as List<dynamic>) {
+            final eventId = b['event_id']?.toString() ?? '';
+            final status = b['status']?.toString().toLowerCase().trim() ?? 'completed';
 
-          if (status != 'cancelled') {
-            final tickets = (b['ticket_count'] as num?)?.toInt() ?? 1;
-            final amount = (b['total_amount'] as num?)?.toDouble() ??
-                (b['amount'] as num?)?.toDouble() ??
-                0.0;
+            if (status != 'cancelled' && status != 'canceled') {
+              final tickets = (b['ticket_count'] as num?)?.toInt() ?? 1;
+              final amount = (b['total_amount'] as num?)?.toDouble() ??
+                  (b['amount'] as num?)?.toDouble() ??
+                  0.0;
 
-            bookedTicketsMap[eventId] = (bookedTicketsMap[eventId] ?? 0) + tickets;
-            revenueMap[eventId] = (revenueMap[eventId] ?? 0.0) + amount;
-            attendeesCountMap[eventId] = (attendeesCountMap[eventId] ?? 0) + 1;
+              bookedTicketsMap[eventId] = (bookedTicketsMap[eventId] ?? 0) + tickets;
+              revenueMap[eventId] = (revenueMap[eventId] ?? 0.0) + amount;
+              attendeesCountMap[eventId] = (attendeesCountMap[eventId] ?? 0) + 1;
+            }
           }
+        } catch (e) {
+          debugPrint("Lỗi tính toán vé đặt sự kiện: $e");
         }
-      } catch (e) {
-        debugPrint("Lỗi tính toán vé đặt sự kiện: $e");
       }
 
       final parsedEvents = eventsList.map((json) {
@@ -146,28 +151,40 @@ class OwnerEventRemoteDataSource {
 
       return createdEvent;
     } catch (e) {
-      debugPrint("Thử lại insert với các trường cơ bản do lỗi: $e");
+      debugPrint("Thử lại insert với các trường tiêu chuẩn do lỗi: $e");
 
-      // Fallback nếu CSDL chưa chạy migration thêm các cột mở rộng
-      final fallbackData = {
+      final minT = (insertData['min_tickets'] as num?)?.toInt() ?? 2;
+      final rawDesc = insertData['description']?.toString() ?? '';
+      final taggedDesc = "$rawDesc\n[min_tickets: $minT]".trim();
+
+      // Thử bỏ court_id và min_tickets nếu chưa có cột trong CSDL, nhưng giữ NGUYÊN tất cả các cột quan trọng
+      final standardData = {
         if (insertData['venue_id'] != null) 'venue_id': insertData['venue_id'],
         'title': insertData['title'] ?? 'Sự kiện mới',
-        'description': insertData['description'] ?? '',
+        'description': taggedDesc,
         'event_date': insertData['event_date'],
         'is_active': insertData['is_active'] ?? true,
+        if (insertData['ticket_price'] != null) 'ticket_price': insertData['ticket_price'],
+        if (insertData['max_tickets'] != null) 'max_tickets': insertData['max_tickets'],
+        if (insertData['sport_type'] != null) 'sport_type': insertData['sport_type'],
+        if (insertData['level'] != null) 'level': insertData['level'],
+        if (insertData['start_time'] != null) 'start_time': insertData['start_time'],
+        if (insertData['end_time'] != null) 'end_time': insertData['end_time'],
+        if (insertData['court_name'] != null) 'court_name': insertData['court_name'],
         if (insertData['banner_url'] != null) 'banner_url': insertData['banner_url'],
       };
 
       try {
         final response = await supabaseClient
             .from('events')
-            .insert(fallbackData)
+            .insert(standardData)
             .select()
             .single();
 
         final createdEvent = OwnerEventEntity.fromJson(
           response as Map<String, dynamic>,
         ).copyWith(
+          minTickets: minT,
           sportType: insertData['sport_type']?.toString() ?? 'Pickleball',
           level: insertData['level']?.toString() ?? 'Mọi trình độ',
           courtName: insertData['court_name']?.toString() ?? 'Sân 1',
@@ -188,7 +205,45 @@ class OwnerEventRemoteDataSource {
 
         return createdEvent;
       } catch (innerErr) {
-        throw Exception("Lỗi khi thêm sự kiện vào Supabase: $innerErr");
+        debugPrint("Thử lại insert với các trường tối thiểu: $innerErr");
+        final fallbackData = {
+          if (insertData['venue_id'] != null) 'venue_id': insertData['venue_id'],
+          'title': insertData['title'] ?? 'Sự kiện mới',
+          'description': taggedDesc,
+          'event_date': insertData['event_date'],
+          'is_active': insertData['is_active'] ?? true,
+          if (insertData['banner_url'] != null) 'banner_url': insertData['banner_url'],
+        };
+
+        final response = await supabaseClient
+            .from('events')
+            .insert(fallbackData)
+            .select()
+            .single();
+
+        final createdEvent = OwnerEventEntity.fromJson(
+          response as Map<String, dynamic>,
+        ).copyWith(
+          minTickets: minT,
+          sportType: insertData['sport_type']?.toString() ?? 'Pickleball',
+          level: insertData['level']?.toString() ?? 'Mọi trình độ',
+          courtName: insertData['court_name']?.toString() ?? 'Sân 1',
+          startTime: insertData['start_time']?.toString() ?? '15:00',
+          endTime: insertData['end_time']?.toString() ?? '18:00',
+          ticketPrice: (insertData['ticket_price'] as num?)?.toDouble() ?? 0.0,
+          maxTickets: (insertData['max_tickets'] as num?)?.toInt() ?? 10,
+        );
+
+        await _syncEventSlots(
+          eventId: createdEvent.id,
+          courtId: insertData['court_id']?.toString(),
+          courtName: insertData['court_name']?.toString(),
+          eventDate: insertData['event_date']?.toString() ?? '',
+          startTimeStr: insertData['start_time']?.toString() ?? '15:00',
+          endTimeStr: insertData['end_time']?.toString() ?? '18:00',
+        );
+
+        return createdEvent;
       }
     }
   }
@@ -248,23 +303,90 @@ class OwnerEventRemoteDataSource {
 
       return updatedEvent;
     } catch (e) {
-      debugPrint("Thử lại update sự kiện với các trường cơ bản: $e");
-      final fallbackUpdate = {
+      debugPrint("Thử lại update sự kiện với các trường tiêu chuẩn: $e");
+
+      final minT = (dataToUpdate['min_tickets'] as num?)?.toInt() ?? 2;
+      final rawDesc = dataToUpdate['description']?.toString() ?? '';
+      final taggedDesc = "$rawDesc\n[min_tickets: $minT]".trim();
+
+      final standardUpdate = {
         if (dataToUpdate['title'] != null) 'title': dataToUpdate['title'],
-        if (dataToUpdate['description'] != null) 'description': dataToUpdate['description'],
+        if (dataToUpdate['description'] != null) 'description': taggedDesc,
         if (dataToUpdate['event_date'] != null) 'event_date': dataToUpdate['event_date'],
         if (dataToUpdate['is_active'] != null) 'is_active': dataToUpdate['is_active'],
+        if (dataToUpdate['ticket_price'] != null) 'ticket_price': dataToUpdate['ticket_price'],
+        if (dataToUpdate['max_tickets'] != null) 'max_tickets': dataToUpdate['max_tickets'],
+        if (dataToUpdate['sport_type'] != null) 'sport_type': dataToUpdate['sport_type'],
+        if (dataToUpdate['level'] != null) 'level': dataToUpdate['level'],
+        if (dataToUpdate['start_time'] != null) 'start_time': dataToUpdate['start_time'],
+        if (dataToUpdate['end_time'] != null) 'end_time': dataToUpdate['end_time'],
+        if (dataToUpdate['court_name'] != null) 'court_name': dataToUpdate['court_name'],
         if (dataToUpdate['banner_url'] != null) 'banner_url': dataToUpdate['banner_url'],
       };
 
-      final response = await supabaseClient
-          .from('events')
-          .update(fallbackUpdate)
-          .eq('id', eventId)
-          .select()
-          .single();
+      try {
+        final response = await supabaseClient
+            .from('events')
+            .update(standardUpdate)
+            .eq('id', eventId)
+            .select()
+            .single();
 
-      return OwnerEventEntity.fromJson(response as Map<String, dynamic>);
+        final updatedEvent = OwnerEventEntity.fromJson(
+          response as Map<String, dynamic>,
+        ).copyWith(
+          minTickets: minT,
+          sportType: dataToUpdate['sport_type']?.toString(),
+          level: dataToUpdate['level']?.toString(),
+          courtName: dataToUpdate['court_name']?.toString(),
+          startTime: dataToUpdate['start_time']?.toString(),
+          endTime: dataToUpdate['end_time']?.toString(),
+          ticketPrice: (dataToUpdate['ticket_price'] as num?)?.toDouble(),
+          maxTickets: (dataToUpdate['max_tickets'] as num?)?.toInt(),
+        );
+
+        await _syncEventSlots(
+          eventId: eventId,
+          courtId: dataToUpdate['court_id']?.toString(),
+          courtName: dataToUpdate['court_name']?.toString(),
+          eventDate: dataToUpdate['event_date']?.toString() ?? updatedEvent.eventDate,
+          startTimeStr: dataToUpdate['start_time']?.toString() ?? updatedEvent.startTime,
+          endTimeStr: dataToUpdate['end_time']?.toString() ?? updatedEvent.endTime,
+        );
+
+        return updatedEvent;
+      } catch (innerErr) {
+        debugPrint("Thử lại update sự kiện với các trường cơ bản: $innerErr");
+        final fallbackUpdate = {
+          if (dataToUpdate['title'] != null) 'title': dataToUpdate['title'],
+          if (dataToUpdate['description'] != null) 'description': taggedDesc,
+          if (dataToUpdate['event_date'] != null) 'event_date': dataToUpdate['event_date'],
+          if (dataToUpdate['is_active'] != null) 'is_active': dataToUpdate['is_active'],
+          if (dataToUpdate['banner_url'] != null) 'banner_url': dataToUpdate['banner_url'],
+        };
+
+        final response = await supabaseClient
+            .from('events')
+            .update(fallbackUpdate)
+            .eq('id', eventId)
+            .select()
+            .single();
+
+        final updatedEvent = OwnerEventEntity.fromJson(
+          response as Map<String, dynamic>,
+        ).copyWith(
+          minTickets: minT,
+          sportType: dataToUpdate['sport_type']?.toString(),
+          level: dataToUpdate['level']?.toString(),
+          courtName: dataToUpdate['court_name']?.toString(),
+          startTime: dataToUpdate['start_time']?.toString(),
+          endTime: dataToUpdate['end_time']?.toString(),
+          ticketPrice: (dataToUpdate['ticket_price'] as num?)?.toDouble(),
+          maxTickets: (dataToUpdate['max_tickets'] as num?)?.toInt(),
+        );
+
+        return updatedEvent;
+      }
     }
   }
 
@@ -441,6 +563,23 @@ class OwnerEventRemoteDataSource {
     } catch (e) {
       debugPrint("Lỗi fetchEventAttendees: $e");
       return [];
+    }
+  }
+
+  // 9. Cập nhật trạng thái vé người tham gia (Check-in / Xác nhận thanh toán)
+  Future<bool> updateAttendeeStatus({
+    required String bookingId,
+    required String status,
+  }) async {
+    try {
+      await supabaseClient
+          .from('event_bookings')
+          .update({'status': status})
+          .eq('id', bookingId);
+      return true;
+    } catch (e) {
+      debugPrint("Lỗi updateAttendeeStatus: $e");
+      return false;
     }
   }
 }

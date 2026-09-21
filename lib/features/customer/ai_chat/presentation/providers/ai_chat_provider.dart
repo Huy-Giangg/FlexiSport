@@ -7,31 +7,56 @@ class AiChatProvider extends ChangeNotifier {
   final AiChatRepository repository;
 
   AiChatProvider({required this.repository}) {
-    _loadApiKey();
+    _initSettings();
   }
 
   final List<ChatMessageEntity> _messages = [];
   bool _isLoading = false;
   String _currentApiKey = '';
+  String _serverUrl = '';
+  String _currentTarget = 'auto'; // 'auto' | 'venue' | 'event' | 'court'
 
   List<ChatMessageEntity> get messages => List.unmodifiable(_messages);
   bool get isLoading => _isLoading;
   String get currentApiKey => _currentApiKey;
+  String get serverUrl => _serverUrl;
+  String get currentTarget => _currentTarget;
 
   static const List<String> defaultPrompts = [
-    "🎾 Sân Pickleball tốt nhất gần tôi",
-    "🏸 Tìm sân Cầu lông giá hợp lý",
-    "💳 Hướng dẫn thanh toán VietQR tự động",
-    "📅 Quy trình đặt sân và thời gian giữ chỗ",
-    "⚠️ Chính sách hủy sân và hoàn tiền sự kiện",
+    "Sân Pickleball tốt nhất gần tôi?",
+    "Tìm sân Cầu lông giá hợp lý",
+    "Có giải đấu nào sắp diễn ra?",
+    "Hướng dẫn thanh toán VietQR tự động",
+    "Chính sách hủy sân và hoàn tiền sự kiện?",
   ];
 
-  Future<void> _loadApiKey() async {
+  static const Map<String, String> targetLabels = {
+    'auto': 'Tất cả',
+    'venue': 'Sân bãi',
+    'event': 'Sự kiện',
+    'court': 'Sân đấu',
+  };
+
+  void setTarget(String target) {
+    if (_currentTarget != target) {
+      _currentTarget = target;
+      notifyListeners();
+    }
+  }
+
+  Future<void> _initSettings() async {
+    _serverUrl = await repository.getServerUrl();
     final key = await repository.getStoredApiKey();
     if (key != null) {
       _currentApiKey = key;
-      notifyListeners();
     }
+    notifyListeners();
+  }
+
+  Future<void> saveServerUrl(String url) async {
+    await repository.saveServerUrl(url);
+    _serverUrl = await repository.getServerUrl();
+    notifyListeners();
   }
 
   Future<void> saveApiKey(String key) async {
@@ -47,21 +72,11 @@ class AiChatProvider extends ChangeNotifier {
     _messages.add(
       ChatMessageEntity(
         id: 'welcome_msg',
-        content: '''
-Xin chào! Em là **FlexiBot** - Trợ lý AI thông minh của nền tảng thể thao **FlexiSport** 🎾🏸⚽.
-
-Em có thể hỗ trợ bạn:
-- 🔍 **Tìm & gợi ý sân**: Tìm sân gần bạn theo môn (Pickleball, Cầu lông, Bóng đá, v.v.), xem giá và đánh giá.
-- ⚡ **Đặt sân tức thì**: Giúp bạn chọn slot và dẫn trực tiếp vào trang đặt sân.
-- 💳 **Hướng dẫn thanh toán VietQR**: Giải thích chi tiết quy trình chuyển khoản và xác nhận tự động.
-- ❓ **Giải đáp thắc mắc**: Chính sách hủy đặt sân, tự động hủy sự kiện thiếu người, dịch vụ tiện ích...
-
-Bạn cần em hỗ trợ gì hôm nay ạ?
-''',
+        content: 'Xin chào! Tôi là FlexiBot AI. Tôi có thể hỗ trợ gì cho bạn hôm nay? 😊',
         isUser: false,
         timestamp: DateTime.now(),
-        suggestedVenues: venues.take(2).toList(),
-        quickReplies: defaultPrompts,
+        suggestedVenues: const [],
+        quickReplies: const [],
       ),
     );
     notifyListeners();
@@ -84,33 +99,137 @@ Bạn cần em hỗ trợ gì hôm nay ạ?
       timestamp: DateTime.now(),
     );
     _messages.add(userMsg);
+
+    // 2. Tạo tin nhắn AI dạng placeholder với trạng thái đang stream
+    final aiMsgId = (DateTime.now().millisecondsSinceEpoch + 1).toString();
+    var currentAiContent = '';
+    final aiPlaceholder = ChatMessageEntity(
+      id: aiMsgId,
+      content: '',
+      isUser: false,
+      timestamp: DateTime.now(),
+      isStreaming: true,
+    );
+    _messages.add(aiPlaceholder);
     _isLoading = true;
     notifyListeners();
 
     try {
-      // 2. Gửi request tới Repository (Gemini API hoặc Smart Fallback)
-      final aiResponse = await repository.sendMessage(
-        prompt: trimmedText,
-        history: _messages,
-        availableVenues: availableVenues,
-        userLat: userLat,
-        userLng: userLng,
+      // 3. Lắng nghe Stream SSE từ backend chatbot-sports
+      final stream = repository.askAiStream(
+        query: trimmedText,
+        target: _currentTarget,
       );
 
-      _messages.add(aiResponse);
+      await for (final token in stream) {
+        currentAiContent += token;
+        final index = _messages.indexWhere((m) => m.id == aiMsgId);
+        if (index != -1) {
+          _messages[index] = _messages[index].copyWith(
+            content: currentAiContent,
+            isStreaming: true,
+          );
+          notifyListeners();
+        }
+      }
+
+      // 4. Kết thúc Stream - parse suggested venues nếu có
+      final finalIndex = _messages.indexWhere((m) => m.id == aiMsgId);
+      if (finalIndex != -1) {
+        final parsed = _extractSuggestedVenues(currentAiContent, availableVenues);
+        _messages[finalIndex] = _messages[finalIndex].copyWith(
+          content: parsed.content.isEmpty ? "Rất tiếc, tôi chưa có thông tin phù hợp cho yêu cầu này." : parsed.content,
+          isStreaming: false,
+          suggestedVenues: parsed.venues,
+          quickReplies: _getRelevantQuickReplies(_currentTarget),
+        );
+      }
     } catch (e) {
-      _messages.add(
-        ChatMessageEntity(
-          id: DateTime.now().millisecondsSinceEpoch.toString(),
-          content: "Đã có sự cố khi kết nối với trợ lý AI ($e). Bạn vui lòng thử lại nhé!",
+      debugPrint("[AiChatProvider] Lỗi stream AI: $e");
+      final errIndex = _messages.indexWhere((m) => m.id == aiMsgId);
+      final currentUrl = await repository.getServerUrl();
+      
+      if (errIndex != -1) {
+        _messages[errIndex] = ChatMessageEntity(
+          id: aiMsgId,
+          content: "⚠️ **Không thể kết nối tới máy chủ AI!**\n\n"
+                   "- **Địa chỉ đang kết nối:** `$currentUrl/api/ask`\n"
+                   "- **Chi tiết lỗi:** `$e`\n\n"
+                   "👉 **Hướng dẫn khắc phục:**\n"
+                   "1. Đảm bảo bạn đã chạy backend Python trong thư mục `chatbot-sports`: `python app.py`.\n"
+                   "2. Nếu đang chạy trên **máy ảo Android (Emulator)**: Vào cài đặt máy chủ (biểu tượng góc trên bên phải) chọn `http://10.0.2.2:5000`.\n"
+                   "3. Nếu đang chạy trên **thiết bị thật (điện thoại cắm dây/wifi)**: Máy tính và điện thoại phải chung mạng Wifi, nhập IP máy tính của bạn (VD: `http://192.168.1.xxx:5000`).\n"
+                   "4. Nếu đang chạy trên **Windows/macOS/Chrome**: Chọn `http://127.0.0.1:5000`.",
           isUser: false,
           timestamp: DateTime.now(),
           isError: true,
-        ),
-      );
+          isStreaming: false,
+        );
+      }
     } finally {
       _isLoading = false;
       notifyListeners();
+    }
+  }
+
+  _ParsedContent _extractSuggestedVenues(String text, List<SportsComplexEntity> availableVenues) {
+    String cleanContent = text;
+    final venues = <SportsComplexEntity>[];
+
+    final venueRegex = RegExp(r'\[SUGGESTED_VENUES:\s*([^\]]+)\]', caseSensitive: false);
+    final match = venueRegex.firstMatch(cleanContent);
+    if (match != null) {
+      final idsStr = match.group(1) ?? '';
+      final ids = idsStr.split(',').map((e) => e.trim()).where((e) => e.isNotEmpty).toList();
+      for (final id in ids) {
+        final found = availableVenues.firstWhere(
+          (v) => v.id == id,
+          orElse: () => SportsComplexEntity(
+            id: '',
+            name: '',
+            address: '',
+            logoUrl: '',
+            rating: 0,
+            open_time: '',
+            close_time: '',
+          ),
+        );
+        if (found.id.isNotEmpty && !venues.any((v) => v.id == found.id)) {
+          venues.add(found);
+        }
+      }
+      cleanContent = cleanContent.replaceAll(venueRegex, '').trim();
+    }
+
+    return _ParsedContent(cleanContent, venues);
+  }
+
+  List<String> _getRelevantQuickReplies(String target) {
+    switch (target) {
+      case 'venue':
+        return [
+          "Sân cầu lông nào gần tôi?",
+          "Sân pickleball có điều hòa",
+          "Giá thuê sân vào giờ cao điểm?",
+        ];
+      case 'event':
+        return [
+          "Các giải đấu sắp diễn ra?",
+          "Kèo giao lưu cho người mới",
+          "Quy định hoàn tiền sự kiện?",
+        ];
+      case 'court':
+        return [
+          "Cách xem khung giờ còn trống",
+          "Thời gian giữ chỗ là bao lâu?",
+          "Hướng dẫn thanh toán VietQR",
+        ];
+      default:
+        return [
+          "Sân Pickleball tốt nhất gần tôi",
+          "Các giải đấu sắp diễn ra?",
+          "Hướng dẫn thanh toán VietQR",
+        ];
     }
   }
 
@@ -120,3 +239,10 @@ Bạn cần em hỗ trợ gì hôm nay ạ?
     notifyListeners();
   }
 }
+
+class _ParsedContent {
+  final String content;
+  final List<SportsComplexEntity> venues;
+  _ParsedContent(this.content, this.venues);
+}
+

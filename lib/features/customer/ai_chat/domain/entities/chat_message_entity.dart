@@ -8,6 +8,7 @@ class ChatMessageEntity {
   final List<SportsComplexEntity> suggestedVenues;
   final List<String> quickReplies;
   final bool isError;
+  final bool isStreaming;
 
   ChatMessageEntity({
     required this.id,
@@ -17,6 +18,7 @@ class ChatMessageEntity {
     this.suggestedVenues = const [],
     this.quickReplies = const [],
     this.isError = false,
+    this.isStreaming = false,
   });
 
   ChatMessageEntity copyWith({
@@ -27,6 +29,7 @@ class ChatMessageEntity {
     List<SportsComplexEntity>? suggestedVenues,
     List<String>? quickReplies,
     bool? isError,
+    bool? isStreaming,
   }) {
     return ChatMessageEntity(
       id: id ?? this.id,
@@ -36,6 +39,8 @@ class ChatMessageEntity {
       suggestedVenues: suggestedVenues ?? this.suggestedVenues,
       quickReplies: quickReplies ?? this.quickReplies,
       isError: isError ?? this.isError,
+      isStreaming: isStreaming ?? this.isStreaming,
     );
   }
 }
+

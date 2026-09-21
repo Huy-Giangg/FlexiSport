@@ -1,3 +1,6 @@
+import 'dart:async';
+import 'dart:convert';
+import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:google_generative_ai/google_generative_ai.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -8,6 +11,148 @@ import 'package:flexisport_app/features/customer/sports_complex/domain/entities/
 
 class AiChatRemoteDatasource {
   static const String _prefApiKey = 'gemini_api_key_custom';
+  static const String _prefServerUrl = 'chatbot_sports_server_url';
+
+  final Dio _dio = Dio(BaseOptions(
+    connectTimeout: const Duration(seconds: 15),
+    receiveTimeout: const Duration(minutes: 2),
+  ));
+
+  /// Lấy URL của backend chatbot-sports (mặc định theo platform hoặc cấu hình người dùng)
+  Future<String> getServerUrl() async {
+    final prefs = await SharedPreferences.getInstance();
+    final customUrl = prefs.getString(_prefServerUrl);
+    if (customUrl != null && customUrl.trim().isNotEmpty) {
+      return customUrl.trim();
+    }
+    return AppConfig.defaultChatbotBaseUrl;
+  }
+
+  /// Chuẩn hóa base URL loại bỏ dấu gạch chéo cuối và hậu tố /api nếu có
+  static String normalizeBaseUrl(String raw) {
+    var trimmed = raw.trim();
+    while (trimmed.endsWith('/')) {
+      trimmed = trimmed.substring(0, trimmed.length - 1);
+    }
+    if (trimmed.endsWith('/api')) {
+      trimmed = trimmed.substring(0, trimmed.length - 4);
+    }
+    return trimmed;
+  }
+
+  /// Lưu URL của backend
+  Future<void> saveServerUrl(String url) async {
+    final prefs = await SharedPreferences.getInstance();
+    final trimmed = url.trim();
+    if (trimmed.isEmpty) {
+      await prefs.remove(_prefServerUrl);
+    } else {
+      final cleanUrl = normalizeBaseUrl(trimmed);
+      await prefs.setString(_prefServerUrl, cleanUrl);
+    }
+  }
+
+  /// Kiểm tra kết nối tới server backend
+  Future<bool> checkServerHealth([String? targetUrl]) async {
+    try {
+      final rawUrl = targetUrl ?? await getServerUrl();
+      final baseHost = normalizeBaseUrl(rawUrl);
+      final response = await _dio.get(
+        '$baseHost/',
+        options: Options(receiveTimeout: const Duration(seconds: 4)),
+      );
+      return response.statusCode == 200;
+    } catch (e) {
+      debugPrint("[AiChat] Lỗi check health: $e");
+      return false;
+    }
+  }
+
+  /// Stream tokens câu trả lời từ backend chatbot-sports qua Server-Sent Events (SSE)
+  Stream<String> streamAsk({
+    required String query,
+    String target = 'auto',
+  }) async* {
+    final rawBaseUrl = await getServerUrl();
+    final baseHost = normalizeBaseUrl(rawBaseUrl);
+    final endpoint = '$baseHost/api/ask';
+
+    debugPrint("[AiChat] ===================================================");
+    debugPrint("[AiChat] Gửi POST request tới: $endpoint");
+    debugPrint("[AiChat] Query: '$query' | Target: '$target'");
+    debugPrint("[AiChat] ===================================================");
+
+    final payload = jsonEncode({
+      'query': query,
+      'target': target,
+    });
+
+    Response<ResponseBody> response;
+    try {
+      response = await _dio.post<ResponseBody>(
+        endpoint,
+        data: payload,
+        options: Options(
+          responseType: ResponseType.stream,
+          headers: {
+            'Accept': 'text/event-stream',
+            'Content-Type': 'application/json; charset=utf-8',
+          },
+        ),
+      );
+      debugPrint("[AiChat] Kết nối thành công! HTTP Status: ${response.statusCode}");
+    } on DioException catch (dioErr) {
+      debugPrint("[AiChat] DioException: ${dioErr.type} - ${dioErr.message}");
+      if (dioErr.error != null) {
+        debugPrint("[AiChat] Inner error: ${dioErr.error}");
+      }
+      throw Exception(
+        "Không thể kết nối đến máy chủ AI tại $endpoint.\n"
+        "Lỗi mạng: ${dioErr.message ?? dioErr.type.name}\n"
+        "Vui lòng đảm bảo backend python (app.py) đang chạy và đúng địa chỉ IP.",
+      );
+    } catch (e) {
+      debugPrint("[AiChat] Lỗi ngoại lệ: $e");
+      throw Exception("Lỗi khi gửi yêu cầu tới AI: $e");
+    }
+
+    final stream = response.data?.stream;
+    if (stream == null) {
+      throw Exception("Không nhận được dữ liệu stream từ máy chủ.");
+    }
+
+    var buffer = '';
+    await for (final chunk in stream) {
+      final decodedChunk = utf8.decode(chunk, allowMalformed: true);
+      buffer += decodedChunk;
+
+      final events = buffer.split('\n\n');
+      buffer = events.removeLast();
+
+      for (final event in events) {
+        final lines = event.split('\n');
+        for (final line in lines) {
+          if (line.startsWith('data: ')) {
+            final rawData = line.substring(6).trim();
+            if (rawData == '[DONE]') {
+              debugPrint("[AiChat] Nhận tín hiệu kết thúc stream [DONE]");
+              return;
+            }
+            try {
+              final jsonMap = jsonDecode(rawData);
+              final token = jsonMap['token'];
+              if (token != null && token is String) {
+                yield token;
+              }
+            } catch (_) {
+              // Bỏ qua nếu dòng data không phải json hợp lệ
+            }
+          }
+        }
+      }
+    }
+  }
+
 
   Future<String?> getStoredApiKey() async {
     final prefs = await SharedPreferences.getInstance();
@@ -36,6 +181,7 @@ class AiChatRemoteDatasource {
     required List<SportsComplexEntity> availableVenues,
     double? userLat,
     double? userLng,
+    String target = 'auto',
   }) async {
     final apiKey = await getStoredApiKey();
 
@@ -64,6 +210,7 @@ class AiChatRemoteDatasource {
   }
 
   Future<ChatMessageEntity> _callGemini({
+
     required String apiKey,
     required String prompt,
     required List<ChatMessageEntity> history,

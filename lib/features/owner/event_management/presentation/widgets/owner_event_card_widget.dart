@@ -187,9 +187,12 @@ class OwnerEventCardWidget extends StatelessWidget {
           ),
         ],
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
+      child: InkWell(
+        onTap: () => EventAttendeesSheet.show(context, event: event, provider: provider),
+        borderRadius: BorderRadius.circular(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
           // Banner or Header Strip
           Stack(
             children: [
@@ -427,7 +430,9 @@ class OwnerEventCardWidget extends StatelessWidget {
                           ),
                         ),
                         Text(
-                          _formatCurrency(event.ticketPrice),
+                          event.ticketPrice == 0
+                              ? "Miễn phí"
+                              : "${_formatCurrency(event.ticketPrice)}/vé",
                           style: GoogleFonts.lexend(
                             fontSize: 13,
                             fontWeight: FontWeight.bold,
@@ -527,6 +532,7 @@ class OwnerEventCardWidget extends StatelessWidget {
           ),
         ],
       ),
+      ),
     );
   }
 
@@ -545,7 +551,7 @@ class OwnerEventCardWidget extends StatelessWidget {
         ),
       ),
       child: Center(
-        child: Icon(Icons.sports_tennis_rounded, size: 40, color: Colors.white.withOpacity(0.35)),
+        child: Icon(Icons.sports_tennis_rounded, size: 40, color: Colors.white.withValues(alpha: 0.35)),
       ),
     );
   }

@@ -15,7 +15,7 @@ import 'package:flexisport_app/features/customer/booking/domain/usecase/get_even
 import 'package:flexisport_app/features/customer/booking/domain/usecase/get_events_usecase.dart';
 import 'package:flexisport_app/features/customer/booking/domain/usecase/book_event_usecase.dart';
 import 'package:flexisport_app/features/customer/booking/domain/usecase/get_user_event_bookings_usecase.dart';
-import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart';
 import 'package:flexisport_app/core/services/notification_service.dart';
 
 class BookingProvider extends ChangeNotifier {
@@ -191,7 +191,9 @@ class BookingProvider extends ChangeNotifier {
 
   Future<EventBookingEntity> registerEvent(Map<String, dynamic> bookingData) async {
     _isLoading = true;
-    notifyListeners();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      notifyListeners();
+    });
     try {
       final booking = await bookEventUseCase(bookingData);
       
@@ -209,7 +211,9 @@ class BookingProvider extends ChangeNotifier {
       return booking;
     } finally {
       _isLoading = false;
-      notifyListeners();
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        notifyListeners();
+      });
     }
   }
 

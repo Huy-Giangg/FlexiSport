@@ -91,13 +91,22 @@ class _VisualCourtEventPickerSheetState extends State<VisualCourtEventPickerShee
   final Map<String, Set<int>> _eventSlots = {};
 
   final int _openHour = 6; // 06:00
-  final int _closeHour = 22; // 22:00
-  final int _totalSlots = 32; // (22 - 6) * 2 = 32 slots of 30 mins
+  final int _totalSlots = 32; // 06:00 to 22:00 (32 slots of 30 mins)
+
+  // Lưu danh sách sân con đang được mở rộng hiển thị lưới slot
+  final Set<String> _expandedCourtIds = {};
 
   @override
   void initState() {
     super.initState();
-    _selectedDate = widget.initialDate;
+    final minDate = DateTime.now().add(const Duration(days: 2));
+    final normalizedMin = DateTime(minDate.year, minDate.month, minDate.day);
+    final normalizedInit = DateTime(widget.initialDate.year, widget.initialDate.month, widget.initialDate.day);
+    if (normalizedInit.isBefore(normalizedMin)) {
+      _selectedDate = normalizedMin;
+    } else {
+      _selectedDate = normalizedInit;
+    }
 
     // Tìm court khởi tạo
     if (widget.courts.isNotEmpty) {
@@ -117,6 +126,13 @@ class _VisualCourtEventPickerSheetState extends State<VisualCourtEventPickerShee
       if (_endSlotIndex! < _startSlotIndex!) {
         _endSlotIndex = _startSlotIndex;
       }
+    }
+
+    // Nếu đã có slot được chọn hoặc chỉ có 1 sân thì tự động mở rộng sân đó
+    if (_startSlotIndex != null && _selectedCourtId != null) {
+      _expandedCourtIds.add(_selectedCourtId!);
+    } else if (widget.courts.length == 1) {
+      _expandedCourtIds.add(widget.courts.first.id);
     }
 
     _loadAvailability();
@@ -159,20 +175,36 @@ class _VisualCourtEventPickerSheetState extends State<VisualCourtEventPickerShee
 
     try {
       // 1. Lấy đơn đặt sân (booking_slots)
-      final bookingResp = await client
-          .from('booking_slots')
-          .select('court_id, slot_index')
-          .eq('booking_date', dateStr);
+      try {
+        final bookingResp = await client
+            .from('booking_slots')
+            .select('court_id, slot_index, bookings!inner(status)')
+            .eq('booking_date', dateStr)
+            .neq('bookings.status', 'cancelled');
 
-      for (final item in (bookingResp as List<dynamic>)) {
-        final cId = item['court_id']?.toString() ?? '';
-        final slot = item['slot_index'] as int? ?? -1;
-        if (cId.isNotEmpty && slot >= 0) {
-          _bookedSlots.putIfAbsent(cId, () => <int>{}).add(slot);
+        for (final item in (bookingResp as List<dynamic>)) {
+          final cId = item['court_id']?.toString() ?? '';
+          final slot = item['slot_index'] as int? ?? -1;
+          if (cId.isNotEmpty && slot >= 0) {
+            _bookedSlots.putIfAbsent(cId, () => <int>{}).add(slot);
+          }
+        }
+      } catch (_) {
+        final bookingResp = await client
+            .from('booking_slots')
+            .select('court_id, slot_index')
+            .eq('booking_date', dateStr);
+
+        for (final item in (bookingResp as List<dynamic>)) {
+          final cId = item['court_id']?.toString() ?? '';
+          final slot = item['slot_index'] as int? ?? -1;
+          if (cId.isNotEmpty && slot >= 0) {
+            _bookedSlots.putIfAbsent(cId, () => <int>{}).add(slot);
+          }
         }
       }
 
-      // 2. Lấy ô bảo trì (court_blocks)
+      // 2. Lấy ô bảo trì (court_blocks) & khóa sân (court_locks)
       try {
         final blockResp = await client
             .from('court_blocks')
@@ -180,6 +212,21 @@ class _VisualCourtEventPickerSheetState extends State<VisualCourtEventPickerShee
             .eq('block_date', dateStr);
 
         for (final item in (blockResp as List<dynamic>)) {
+          final cId = item['court_id']?.toString() ?? '';
+          final slot = item['slot_index'] as int? ?? -1;
+          if (cId.isNotEmpty && slot >= 0) {
+            _blockedSlots.putIfAbsent(cId, () => <int>{}).add(slot);
+          }
+        }
+      } catch (_) {}
+
+      try {
+        final lockResp = await client
+            .from('court_locks')
+            .select('court_id, slot_index')
+            .eq('lock_date', dateStr);
+
+        for (final item in (lockResp as List<dynamic>)) {
           final cId = item['court_id']?.toString() ?? '';
           final slot = item['slot_index'] as int? ?? -1;
           if (cId.isNotEmpty && slot >= 0) {
@@ -239,6 +286,7 @@ class _VisualCourtEventPickerSheetState extends State<VisualCourtEventPickerShee
     }
 
     setState(() {
+      _expandedCourtIds.add(courtId);
       if (_selectedCourtId != courtId) {
         // Đổi sang sân khác -> Chọn lại từ đầu
         _selectedCourtId = courtId;
@@ -413,7 +461,7 @@ class _VisualCourtEventPickerSheetState extends State<VisualCourtEventPickerShee
                         padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
                         physics: const BouncingScrollPhysics(),
                         itemCount: widget.courts.length,
-                        separatorBuilder: (_, __) => const SizedBox(height: 16),
+                        separatorBuilder: (context, index) => const SizedBox(height: 16),
                         itemBuilder: (ctx, index) {
                           final court = widget.courts[index];
                           return _buildCourtTimelineCard(court);
@@ -429,8 +477,9 @@ class _VisualCourtEventPickerSheetState extends State<VisualCourtEventPickerShee
   }
 
   Widget _buildDateSelector() {
-    final now = DateTime.now();
-    final dates = List.generate(14, (i) => now.add(Duration(days: i)));
+    final minDate = DateTime.now().add(const Duration(days: 2));
+    final normalizedMin = DateTime(minDate.year, minDate.month, minDate.day);
+    final dates = List.generate(30, (i) => normalizedMin.add(Duration(days: i)));
 
     return SizedBox(
       height: 40,
@@ -438,7 +487,7 @@ class _VisualCourtEventPickerSheetState extends State<VisualCourtEventPickerShee
         scrollDirection: Axis.horizontal,
         physics: const BouncingScrollPhysics(),
         itemCount: dates.length,
-        separatorBuilder: (_, __) => const SizedBox(width: 8),
+        separatorBuilder: (context, index) => const SizedBox(width: 8),
         itemBuilder: (ctx, index) {
           final d = dates[index];
           final isSelected = d.year == _selectedDate.year &&
@@ -446,8 +495,7 @@ class _VisualCourtEventPickerSheetState extends State<VisualCourtEventPickerShee
               d.day == _selectedDate.day;
 
           String dayLabel = "${d.day}/${d.month}";
-          if (index == 0) dayLabel = "Hôm nay ($dayLabel)";
-          if (index == 1) dayLabel = "Ngày mai ($dayLabel)";
+          if (index == 0) dayLabel = "${d.day}/${d.month} (Sau 2 ngày)";
 
           return InkWell(
             onTap: () {
@@ -523,6 +571,7 @@ class _VisualCourtEventPickerSheetState extends State<VisualCourtEventPickerShee
 
   Widget _buildCourtTimelineCard(OwnerCourtEntity court) {
     final isCurrentCourtSelected = _selectedCourtId == court.id;
+    final isExpanded = _expandedCourtIds.contains(court.id);
     final courtBooked = _bookedSlots[court.id] ?? <int>{};
     final courtBlocked = _blockedSlots[court.id] ?? <int>{};
     final courtEvent = _eventSlots[court.id] ?? <int>{};
@@ -548,147 +597,207 @@ class _VisualCourtEventPickerSheetState extends State<VisualCourtEventPickerShee
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Court Header
-          Padding(
-            padding: const EdgeInsets.fromLTRB(14, 12, 14, 10),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Row(
-                  children: [
-                    Icon(
-                      Icons.stadium_rounded,
-                      color: isCurrentCourtSelected ? AppColors.primary : Colors.grey.shade700,
-                      size: 18,
-                    ),
-                    const SizedBox(width: 6),
-                    Text(
-                      court.name,
-                      style: GoogleFonts.lexend(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 14,
-                        color: isCurrentCourtSelected ? AppColors.primary : AppColors.onBackground,
-                      ),
-                    ),
-                    if (court.sportType != null) ...[
-                      const SizedBox(width: 8),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFF1F5F9),
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                        child: Text(
-                          court.sportType!,
-                          style: GoogleFonts.lexend(fontSize: 10, color: Colors.grey.shade700),
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
-                Text(
-                  "Còn $freeSlotsCount / $_totalSlots ô trống",
-                  style: GoogleFonts.lexend(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w600,
-                    color: freeSlotsCount > 0 ? const Color(0xFF2E7D32) : Colors.red,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const Divider(height: 1, color: Color(0xFFF1F5F9)),
-
-          // Slot Strip
-          SizedBox(
-            height: 68,
-            child: ListView.separated(
-              scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-              physics: const BouncingScrollPhysics(),
-              itemCount: _totalSlots,
-              separatorBuilder: (_, __) => const SizedBox(width: 6),
-              itemBuilder: (ctx, slotIdx) {
-                final isBooked = courtBooked.contains(slotIdx);
-                final isBlocked = courtBlocked.contains(slotIdx);
-                final isEvent = courtEvent.contains(slotIdx);
-
-                final isSelected = isCurrentCourtSelected &&
-                    _startSlotIndex != null &&
-                    _endSlotIndex != null &&
-                    slotIdx >= _startSlotIndex! &&
-                    slotIdx <= _endSlotIndex!;
-
-                final startT = _slotToStartTime(slotIdx);
-                final endT = _slotToEndTime(slotIdx);
-                final timeLabel = "${_formatTime(startT)} - ${_formatTime(endT)}";
-
-                Color cardBg = const Color(0xFFF8FAFC);
-                Color borderC = const Color(0xFFE2E8F0);
-                Color textC = AppColors.onBackground;
-                String subText = "Trống";
-
-                if (isSelected) {
-                  cardBg = AppColors.primary;
-                  borderC = AppColors.primary;
-                  textC = Colors.white;
-                  subText = "Đang chọn";
-                } else if (isBooked) {
-                  cardBg = const Color(0xFFFFEBEE);
-                  borderC = const Color(0xFFFFCDD2);
-                  textC = const Color(0xFFC62828);
-                  subText = "Đã đặt";
-                } else if (isEvent) {
-                  cardBg = const Color(0xFFF3E5F5);
-                  borderC = const Color(0xFFE1BEE7);
-                  textC = const Color(0xFF7B1FA2);
-                  subText = "Sự kiện";
-                } else if (isBlocked) {
-                  cardBg = const Color(0xFFECEFF1);
-                  borderC = const Color(0xFFCFD8DC);
-                  textC = const Color(0xFF546E7A);
-                  subText = "Bảo trì";
+          // Court Header (Bấm để đóng / mở toàn bộ lưới giờ trực quan)
+          InkWell(
+            onTap: () {
+              setState(() {
+                if (isExpanded) {
+                  _expandedCourtIds.remove(court.id);
+                } else {
+                  _expandedCourtIds.add(court.id);
                 }
-
-                return InkWell(
-                  onTap: () => _onSlotTapped(court.id, court.name, slotIdx),
-                  borderRadius: BorderRadius.circular(10),
-                  child: Container(
-                    width: 78,
-                    padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: cardBg,
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: borderC),
-                    ),
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
+              });
+            },
+            borderRadius: BorderRadius.circular(18),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.stadium_rounded,
+                    color: isCurrentCourtSelected ? AppColors.primary : Colors.grey.shade700,
+                    size: 20,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
                       children: [
-                        Text(
-                          timeLabel,
-                          style: GoogleFonts.lexend(
-                            fontSize: 10,
-                            fontWeight: FontWeight.bold,
-                            color: textC,
-                          ),
-                          maxLines: 1,
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          subText,
-                          style: GoogleFonts.lexend(
-                            fontSize: 9,
-                            fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                            color: isSelected ? Colors.white.withOpacity(0.9) : textC.withOpacity(0.8),
+                        Flexible(
+                          child: Text(
+                            court.name,
+                            style: GoogleFonts.lexend(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 14,
+                              color: isCurrentCourtSelected ? AppColors.primary : AppColors.onBackground,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                            maxLines: 1,
                           ),
                         ),
+                        if (court.sportType != null) ...[
+                          const SizedBox(width: 6),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFF1F5F9),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: Text(
+                              court.sportType!,
+                              style: GoogleFonts.lexend(fontSize: 10, color: Colors.grey.shade700),
+                            ),
+                          ),
+                        ],
                       ],
                     ),
                   ),
-                );
-              },
+                  const SizedBox(width: 8),
+                  Text(
+                    "Còn $freeSlotsCount / $_totalSlots ô trống",
+                    style: GoogleFonts.lexend(
+                      fontSize: 11.5,
+                      fontWeight: FontWeight.w600,
+                      color: freeSlotsCount > 0 ? const Color(0xFF2E7D32) : Colors.red,
+                    ),
+                  ),
+                  const SizedBox(width: 4),
+                  AnimatedRotation(
+                    turns: isExpanded ? 0.5 : 0.0,
+                    duration: const Duration(milliseconds: 200),
+                    child: Icon(
+                      Icons.keyboard_arrow_down_rounded,
+                      color: isCurrentCourtSelected ? AppColors.primary : Colors.grey.shade600,
+                      size: 22,
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
+
+          if (isExpanded) ...[
+            const Divider(height: 1, color: Color(0xFFF1F5F9)),
+
+            // Full Slot Grid (Lưới hiển thị đầy đủ 32 ô trực quan)
+            Padding(
+              padding: const EdgeInsets.all(12),
+              child: GridView.builder(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 4,
+                  mainAxisSpacing: 8,
+                  crossAxisSpacing: 8,
+                  childAspectRatio: 1.85,
+                ),
+                itemCount: _totalSlots,
+                itemBuilder: (ctx, slotIdx) {
+                  final isBooked = courtBooked.contains(slotIdx);
+                  final isBlocked = courtBlocked.contains(slotIdx);
+                  final isEvent = courtEvent.contains(slotIdx);
+
+                  final isSelected = isCurrentCourtSelected &&
+                      _startSlotIndex != null &&
+                      _endSlotIndex != null &&
+                      slotIdx >= _startSlotIndex! &&
+                      slotIdx <= _endSlotIndex!;
+
+                  final startT = _slotToStartTime(slotIdx);
+                  final endT = _slotToEndTime(slotIdx);
+                  final timeLabel = "${_formatTime(startT)} - ${_formatTime(endT)}";
+
+                  Color cardBg = const Color(0xFFF8FAFC);
+                  Color borderC = const Color(0xFFE2E8F0);
+                  Color textC = AppColors.onBackground;
+                  String subText = "Trống";
+                  IconData statusIcon = Icons.check_circle_outline_rounded;
+                  Color statusIconColor = const Color(0xFF2E7D32);
+
+                  if (isSelected) {
+                    cardBg = AppColors.primary;
+                    borderC = AppColors.primary;
+                    textC = Colors.white;
+                    subText = "Đang chọn";
+                    statusIcon = Icons.check_circle_rounded;
+                    statusIconColor = Colors.white;
+                  } else if (isBooked) {
+                    cardBg = const Color(0xFFFFEBEE);
+                    borderC = const Color(0xFFFFCDD2);
+                    textC = const Color(0xFFC62828);
+                    subText = "Khách đặt";
+                    statusIcon = Icons.block_rounded;
+                    statusIconColor = const Color(0xFFC62828);
+                  } else if (isEvent) {
+                    cardBg = const Color(0xFFF3E5F5);
+                    borderC = const Color(0xFFE1BEE7);
+                    textC = const Color(0xFF7B1FA2);
+                    subText = "Sự kiện";
+                    statusIcon = Icons.event_busy_rounded;
+                    statusIconColor = const Color(0xFF7B1FA2);
+                  } else if (isBlocked) {
+                    cardBg = const Color(0xFFECEFF1);
+                    borderC = const Color(0xFFCFD8DC);
+                    textC = const Color(0xFF546E7A);
+                    subText = "Bảo trì";
+                    statusIcon = Icons.build_circle_outlined;
+                    statusIconColor = const Color(0xFF546E7A);
+                  }
+
+                  return InkWell(
+                    onTap: () => _onSlotTapped(court.id, court.name, slotIdx),
+                    borderRadius: BorderRadius.circular(10),
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: cardBg,
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: borderC, width: isSelected ? 1.5 : 1),
+                      ),
+                      padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 4),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Text(
+                            timeLabel,
+                            style: GoogleFonts.lexend(
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold,
+                              color: textC,
+                            ),
+                            maxLines: 1,
+                          ),
+                          const SizedBox(height: 2),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(statusIcon, size: 10, color: statusIconColor),
+                              const SizedBox(width: 3),
+                              Text(
+                                subText,
+                                style: GoogleFonts.lexend(
+                                  fontSize: 9.5,
+                                  fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
+                                  color: isSelected
+                                      ? Colors.white
+                                      : (isBooked
+                                          ? const Color(0xFFC62828)
+                                          : (isEvent
+                                              ? const Color(0xFF7B1FA2)
+                                              : (isBlocked
+                                                  ? const Color(0xFF546E7A)
+                                                  : const Color(0xFF2E7D32)))),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ],
         ],
       ),
     );

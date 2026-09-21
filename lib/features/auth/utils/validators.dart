@@ -138,10 +138,10 @@ class MyValidators {
     }
     final height = double.tryParse(value.trim());
     if (height == null) {
-      return 'Vui lòng nhập số hợp lệ';
+      return 'Số không hợp lệ';
     }
     if (height < 50 || height > 250) {
-      return 'Chiều cao phải từ 50cm đến 250cm';
+      return 'Từ 50 đến 250 cm';
     }
     return null;
   }
@@ -153,11 +153,72 @@ class MyValidators {
     }
     final weight = double.tryParse(value.trim());
     if (weight == null) {
-      return 'Vui lòng nhập số hợp lệ';
+      return 'Số không hợp lệ';
     }
     if (weight < 20 || weight > 200) {
-      return 'Cân nặng phải từ 20kg đến 200kg';
+      return 'Từ 20 đến 200 kg';
     }
     return null;
   }
+
+  // Helper format định dạng tiền tệ VND (ví dụ: 100000 -> "100.000")
+  static String formatCurrency(double amount) {
+    final str = amount.toStringAsFixed(0);
+    final buffer = StringBuffer();
+    int count = 0;
+    for (int i = str.length - 1; i >= 0; i--) {
+      buffer.write(str[i]);
+      count++;
+      if (count % 3 == 0 && i > 0) {
+        buffer.write('.');
+      }
+    }
+    return buffer.toString().split('').reversed.join('');
+  }
+
+  // Validator cho Giá tiền / Chi phí (VND)
+  static String? validatePrice(
+    String? value, {
+    double max = 10000000,
+    double? maxAllowed,
+    String? maxAllowedMessage,
+    bool allowZero = true,
+  }) {
+    if (value == null || value.trim().isEmpty) {
+      return allowZero
+          ? 'Vui lòng nhập số tiền (hoặc ghi 0 nếu miễn phí)'
+          : 'Vui lòng nhập số tiền';
+    }
+
+    final cleanValue = value.replaceAll('.', '').replaceAll(',', '').trim();
+    final parsed = double.tryParse(cleanValue);
+
+    if (parsed == null) {
+      return 'Vui lòng nhập số tiền hợp lệ';
+    }
+
+    if (parsed < 0) {
+      return 'Chi phí không được là số âm';
+    }
+
+    if (!allowZero && parsed == 0) {
+      return 'Số tiền phải lớn hơn 0';
+    }
+
+    if (parsed > 0 && parsed < 1000) {
+      return 'Chi phí tối thiểu từ 1.000đ (hoặc 0 nếu miễn phí)';
+    }
+
+    if (maxAllowed != null && parsed > maxAllowed) {
+      return maxAllowedMessage ??
+          'Số tiền không được vượt quá ${formatCurrency(maxAllowed)}đ';
+    }
+
+    if (parsed > max) {
+      return 'Số tiền không được vượt quá ${formatCurrency(max)}đ';
+    }
+
+    return null;
+  }
 }
+

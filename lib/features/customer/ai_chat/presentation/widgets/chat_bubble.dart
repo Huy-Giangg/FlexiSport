@@ -42,7 +42,7 @@ class ChatBubble extends StatelessWidget {
                 ),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.green.withOpacity(0.15),
+                    color: Colors.green.withValues(alpha: 0.15),
                     blurRadius: 8,
                     offset: const Offset(0, 3),
                   ),
@@ -92,7 +92,7 @@ class ChatBubble extends StatelessWidget {
                   shape: BoxShape.circle,
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.green.withOpacity(0.3),
+                      color: Colors.green.withValues(alpha: 0.3),
                       blurRadius: 6,
                       offset: const Offset(0, 2),
                     ),
@@ -112,40 +112,65 @@ class ChatBubble extends StatelessWidget {
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                       decoration: BoxDecoration(
-                        color: Colors.white,
+                        color: message.isError ? const Color(0xFFFEF2F2) : Colors.white,
                         borderRadius: const BorderRadius.only(
                           topLeft: Radius.circular(4),
                           topRight: Radius.circular(18),
                           bottomLeft: Radius.circular(18),
                           bottomRight: Radius.circular(18),
                         ),
-                        border: Border.all(color: Colors.grey.shade200),
+                        border: Border.all(
+                          color: message.isError ? Colors.red.shade200 : Colors.grey.shade200,
+                        ),
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.black.withOpacity(0.04),
+                            color: Colors.black.withValues(alpha: 0.04),
                             blurRadius: 8,
                             offset: const Offset(0, 2),
                           ),
                         ],
                       ),
-                      child: MarkdownBody(
-                        data: message.content,
-                        styleSheet: MarkdownStyleSheet(
-                          p: const TextStyle(
-                            fontSize: 14,
-                            height: 1.45,
-                            color: Color(0xFF1E293B),
-                          ),
-                          strong: const TextStyle(
-                            fontWeight: FontWeight.bold,
-                            color: Color(0xFF0F172A),
-                          ),
-                          listBullet: const TextStyle(
-                            fontSize: 14,
-                            color: Color(0xFF006D38),
-                          ),
-                        ),
-                      ),
+                      child: message.isStreaming && message.content.isEmpty
+                          ? Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                SizedBox(
+                                  width: 14,
+                                  height: 14,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    valueColor: AlwaysStoppedAnimation<Color>(Colors.green.shade700),
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Text(
+                                  "FlexiBot đang suy nghĩ...",
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    color: Colors.grey.shade600,
+                                    fontStyle: FontStyle.italic,
+                                  ),
+                                ),
+                              ],
+                            )
+                          : MarkdownBody(
+                              data: message.isStreaming ? "${message.content} ▍" : message.content,
+                              styleSheet: MarkdownStyleSheet(
+                                p: TextStyle(
+                                  fontSize: 14,
+                                  height: 1.45,
+                                  color: message.isError ? Colors.red.shade900 : const Color(0xFF1E293B),
+                                ),
+                                strong: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  color: message.isError ? Colors.red.shade900 : const Color(0xFF0F172A),
+                                ),
+                                listBullet: TextStyle(
+                                  fontSize: 14,
+                                  color: message.isError ? Colors.red.shade700 : const Color(0xFF006D38),
+                                ),
+                              ),
+                            ),
                     ),
 
                     // Danh sách thẻ sân tương tác (nếu AI có đề xuất sân)

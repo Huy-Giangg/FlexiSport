@@ -78,7 +78,7 @@ class OwnerEventEntity {
     final start = startDateTime;
     if (start == null) return false;
     final diffInMinutes = start.difference(DateTime.now()).inMinutes;
-    return isActive && !hasPassed && diffInMinutes <= 120 && bookedTicketsCount < minTickets;
+    return isActive && !hasPassed && diffInMinutes <= 120 && diffInMinutes >= 0 && bookedTicketsCount < minTickets;
   }
 
   bool get hasPassed {
@@ -171,13 +171,24 @@ class OwnerEventEntity {
     int attendees = 0,
   }) {
     final maxT = (json['max_tickets'] as num?)?.toInt() ?? 10;
-    final minT = (json['min_tickets'] as num?)?.toInt() ?? 2;
+    int minT = (json['min_tickets'] as num?)?.toInt() ?? 0;
+
+    final rawDesc = json['description']?.toString() ?? '';
+    if (minT <= 0) {
+      final match = RegExp(r'\[min_tickets:\s*(\d+)\]').firstMatch(rawDesc);
+      if (match != null) {
+        minT = int.tryParse(match.group(1) ?? '') ?? 2;
+      } else {
+        minT = 2;
+      }
+    }
+    final cleanDesc = rawDesc.replaceAll(RegExp(r'\s*\[min_tickets:\s*\d+\]'), '').trim();
 
     return OwnerEventEntity(
       id: json['id']?.toString() ?? '',
       venueId: json['venue_id']?.toString() ?? '',
       title: json['title']?.toString() ?? '',
-      description: json['description']?.toString() ?? '',
+      description: cleanDesc,
       bannerUrl: json['banner_url']?.toString(),
       eventDate: _cleanDate(json['event_date']?.toString()),
       isActive: json['is_active'] as bool? ?? true,

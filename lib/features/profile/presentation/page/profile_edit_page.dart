@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -83,10 +84,18 @@ class _ProfileEditPageState extends State<ProfileEditPage> {
         _selectedGender = data['gender']?.toString() ?? '';
 
         final heightVal = (data['height'] as num?)?.toDouble() ?? 0.0;
-        _heightController.text = heightVal > 0 ? heightVal.toString() : '';
+        _heightController.text = heightVal > 0
+            ? (heightVal % 1 == 0
+                ? heightVal.toInt().toString()
+                : heightVal.toString())
+            : '';
 
         final weightVal = (data['weight'] as num?)?.toDouble() ?? 0.0;
-        _weightController.text = weightVal > 0 ? weightVal.toString() : '';
+        _weightController.text = weightVal > 0
+            ? (weightVal % 1 == 0
+                ? weightVal.toInt().toString()
+                : weightVal.toString())
+            : '';
       }
     } catch (e) {
       debugPrint("Lỗi tải thông tin cá nhân: $e");
@@ -338,6 +347,7 @@ class _ProfileEditPageState extends State<ProfileEditPage> {
 
                         // 4. Ngày sinh & Giới tính
                         Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             // Ngày sinh
                             Expanded(
@@ -425,6 +435,7 @@ class _ProfileEditPageState extends State<ProfileEditPage> {
 
                         // 5. Chiều cao & Cân nặng
                         Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             // Chiều cao
                             Expanded(
@@ -442,8 +453,15 @@ class _ProfileEditPageState extends State<ProfileEditPage> {
                                         const TextInputType.numberWithOptions(
                                           decimal: true,
                                         ),
+                                    inputFormatters: [
+                                      FilteringTextInputFormatter.allow(
+                                        RegExp(r'[0-9.]'),
+                                      ),
+                                      LengthLimitingTextInputFormatter(5),
+                                    ],
                                     decoration: _buildInputDecoration(
-                                      hintText: "Nhập chiều cao",
+                                      hintText: "Ví dụ: 170",
+                                      suffixText: "cm",
                                     ),
                                     validator: MyValidators.validateHeight,
                                   ),
@@ -467,8 +485,15 @@ class _ProfileEditPageState extends State<ProfileEditPage> {
                                         const TextInputType.numberWithOptions(
                                           decimal: true,
                                         ),
+                                    inputFormatters: [
+                                      FilteringTextInputFormatter.allow(
+                                        RegExp(r'[0-9.]'),
+                                      ),
+                                      LengthLimitingTextInputFormatter(5),
+                                    ],
                                     decoration: _buildInputDecoration(
-                                      hintText: "Nhập cân nặng",
+                                      hintText: "Ví dụ: 65",
+                                      suffixText: "kg",
                                     ),
                                     validator: MyValidators.validateWeight,
                                   ),
@@ -598,16 +623,32 @@ class _ProfileEditPageState extends State<ProfileEditPage> {
     String? hintText,
     Widget? prefixIcon,
     Widget? suffixIcon,
+    String? suffixText,
+    TextStyle? suffixStyle,
     Color? filledColor,
+    int errorMaxLines = 2,
   }) {
     return InputDecoration(
       hintText: hintText,
       hintStyle: const TextStyle(color: Colors.grey, fontSize: 14),
       prefixIcon: prefixIcon,
       suffixIcon: suffixIcon,
+      suffixText: suffixText,
+      suffixStyle: suffixStyle ??
+          GoogleFonts.lexend(
+            color: Colors.grey.shade600,
+            fontSize: 13,
+            fontWeight: FontWeight.w500,
+          ),
       fillColor: filledColor ?? Colors.white,
       filled: filledColor != null,
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      errorMaxLines: errorMaxLines,
+      errorStyle: GoogleFonts.lexend(
+        color: Colors.redAccent,
+        fontSize: 11.5,
+        height: 1.25,
+      ),
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
         borderSide: BorderSide(color: Colors.grey.shade300),
