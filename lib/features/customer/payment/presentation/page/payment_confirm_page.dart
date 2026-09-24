@@ -300,13 +300,20 @@ class _PaymentConfirmPageState extends State<PaymentConfirmPage> {
     }
 
     if (mounted) {
-      await context.read<BookingProvider>().releaseAllUserLocks(
-            venueId: widget.args.infoArgs.venue.id,
-            date: queryDate,
-            userId: _userId,
-            lockToken: widget.args.infoArgs.lockToken,
-          );
-      context.pushReplacement("/PaymentCancelPage");
+      try {
+        await context.read<BookingProvider>().releaseAllUserLocks(
+              venueId: widget.args.infoArgs.venue.id,
+              date: queryDate,
+              userId: _userId,
+              lockToken: widget.args.infoArgs.lockToken,
+            );
+        // Tải lại ngay lập tức để giải phóng ô trên lưới
+        await context.read<BookingProvider>().loadBookedSlots(widget.args.infoArgs.venue.id, queryDate);
+        await context.read<BookingProvider>().loadActiveLocks(widget.args.infoArgs.venue.id, queryDate);
+      } catch (_) {}
+      if (mounted) {
+        context.pushReplacement("/PaymentCancelPage");
+      }
     }
   }
 
@@ -316,7 +323,7 @@ class _PaymentConfirmPageState extends State<PaymentConfirmPage> {
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text("Xác nhận hủy"),
-        content: const Text("Bạn muốn hủy giao dịch thanh toán? Các ô giờ đã giữ chỗ sẽ được giải phóng."),
+        content: const Text("Bạn muốn hủy giao dịch thanh toán? Các ô giờ đã giữ chỗ sẽ được giải phóng ngay lập tức."),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
@@ -331,9 +338,11 @@ class _PaymentConfirmPageState extends State<PaymentConfirmPage> {
     );
 
     if (confirm == true) {
-      setState(() {
-        _isLoading = true;
-      });
+      if (mounted) {
+        setState(() {
+          _isLoading = true;
+        });
+      }
       await _onTimerExpired();
     }
   }
@@ -358,10 +367,11 @@ class _PaymentConfirmPageState extends State<PaymentConfirmPage> {
 
   @override
   Widget build(BuildContext context) {
-    return WillPopScope(
-      onWillPop: () async {
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) async {
+        if (didPop) return;
         await _handleUserCancel();
-        return false;
       },
       child: Scaffold(
         backgroundColor: const Color(0xFFE0FFF0),
@@ -417,7 +427,10 @@ class _PaymentConfirmPageState extends State<PaymentConfirmPage> {
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                 padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
               ),
-              onPressed: () => context.pop(),
+              onPressed: () async {
+                setState(() => _isLoading = true);
+                await _onTimerExpired();
+              },
               child: const Text("Quay lại", style: TextStyle(color: Colors.white, fontSize: 16)),
             )
           ],

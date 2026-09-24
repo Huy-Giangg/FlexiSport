@@ -65,6 +65,9 @@ class _OwnerNotificationsBottomSheetState extends State<OwnerNotificationsBottom
           for (var item in bookingsResp as List) {
             final b = item['bookings'];
             if (b == null) continue;
+            final status = b['status']?.toString().toLowerCase() ?? 'pending';
+            if (status == 'pending_payment') continue;
+
             final bId = b['id']?.toString() ?? '';
             if (seenBookingIds.contains(bId)) continue;
             seenBookingIds.add(bId);
@@ -73,7 +76,6 @@ class _OwnerNotificationsBottomSheetState extends State<OwnerNotificationsBottom
             final venueName = item['courts']?['venues']?['name']?.toString() ?? 'Cơ sở';
             final courtName = item['courts']?['name']?.toString() ?? 'Sân';
             final date = item['booking_date']?.toString() ?? '';
-            final status = b['status']?.toString() ?? 'pending';
 
             list.add({
               'id': bId,

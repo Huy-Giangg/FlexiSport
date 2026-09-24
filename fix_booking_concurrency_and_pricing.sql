@@ -60,7 +60,7 @@ CREATE POLICY "Cho phép đọc locks công khai" ON court_locks
 DROP POLICY IF EXISTS "Cho phép người dùng tạo lock" ON court_locks;
 CREATE POLICY "Cho phép người dùng tạo lock" ON court_locks 
     FOR INSERT WITH CHECK (
-        auth.uid() = user_id 
+        auth.uid()::text = user_id::text 
         OR user_id IS NULL 
         OR lock_token IS NOT NULL
     );
@@ -68,7 +68,7 @@ CREATE POLICY "Cho phép người dùng tạo lock" ON court_locks
 DROP POLICY IF EXISTS "Cho phép người dùng xóa lock" ON court_locks;
 CREATE POLICY "Cho phép người dùng xóa lock" ON court_locks 
     FOR DELETE USING (
-        auth.uid() = user_id 
+        auth.uid()::text = user_id::text 
         OR user_id IS NULL 
         OR lock_token IS NOT NULL
     );
@@ -82,7 +82,7 @@ CREATE OR REPLACE FUNCTION acquire_court_lock(
     p_court_id UUID,
     p_slot_index INTEGER,
     p_booking_date DATE,
-    p_user_id UUID DEFAULT NULL,
+    p_user_id VARCHAR DEFAULT NULL,
     p_lock_token VARCHAR DEFAULT NULL,
     p_duration_minutes INTEGER DEFAULT 5
 )
@@ -129,7 +129,7 @@ BEGIN
     LIMIT 1;
 
     IF v_existing_lock.id IS NOT NULL THEN
-        IF (p_user_id IS NOT NULL AND v_existing_lock.user_id = p_user_id)
+        IF (p_user_id IS NOT NULL AND v_existing_lock.user_id::text = p_user_id::text)
            OR (p_lock_token IS NOT NULL AND v_existing_lock.lock_token = p_lock_token) THEN
             UPDATE court_locks
             SET locked_until = v_new_expiry,
@@ -183,7 +183,7 @@ $$;
 -- 2.2 FUNCTION BATCH: verify_and_hold_slots_batch (Chặn tại nút TIẾP THEO)
 CREATE OR REPLACE FUNCTION verify_and_hold_slots_batch(
     p_slots JSONB,
-    p_user_id UUID DEFAULT NULL,
+    p_user_id VARCHAR DEFAULT NULL,
     p_lock_token VARCHAR DEFAULT NULL,
     p_duration_minutes INTEGER DEFAULT 10
 )
@@ -242,7 +242,7 @@ BEGIN
         LIMIT 1;
 
         IF v_existing_lock.id IS NOT NULL THEN
-            IF NOT ((p_user_id IS NOT NULL AND v_existing_lock.user_id = p_user_id)
+            IF NOT ((p_user_id IS NOT NULL AND v_existing_lock.user_id::text = p_user_id::text)
                  OR (p_lock_token IS NOT NULL AND v_existing_lock.lock_token = p_lock_token)) THEN
                 
                 SELECT name INTO v_court_name FROM courts WHERE id = v_court_id;
@@ -298,7 +298,7 @@ CREATE OR REPLACE FUNCTION release_court_lock(
     p_court_id UUID,
     p_slot_index INTEGER,
     p_booking_date DATE,
-    p_user_id UUID DEFAULT NULL,
+    p_user_id VARCHAR DEFAULT NULL,
     p_lock_token VARCHAR DEFAULT NULL
 )
 RETURNS VOID
@@ -311,7 +311,7 @@ BEGIN
       AND slot_index = p_slot_index
       AND booking_date = p_booking_date
       AND (
-          (p_user_id IS NOT NULL AND user_id = p_user_id)
+          (p_user_id IS NOT NULL AND user_id::text = p_user_id::text)
           OR (p_lock_token IS NOT NULL AND lock_token = p_lock_token)
           OR (user_id IS NULL AND lock_token IS NULL)
       );
@@ -319,7 +319,7 @@ END;
 $$;
 
 
--- Đảm bảo realtime cho court_locks
+-- Đảm bảo realtime cho court_locks và courts
 DO $$
 BEGIN
     IF NOT EXISTS (
@@ -327,6 +327,13 @@ BEGIN
         WHERE pubname = 'supabase_realtime' AND tablename = 'court_locks'
     ) THEN
         ALTER PUBLICATION supabase_realtime ADD TABLE court_locks;
+    END IF;
+
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_publication_tables 
+        WHERE pubname = 'supabase_realtime' AND tablename = 'courts'
+    ) THEN
+        ALTER PUBLICATION supabase_realtime ADD TABLE courts;
     END IF;
 END $$;
 
@@ -394,7 +401,7 @@ EXECUTE FUNCTION on_booking_status_change_trigger();
 CREATE OR REPLACE FUNCTION extend_court_locks(
     p_slots JSONB,              -- [{court_id, booking_date, slot_index}]
     p_lock_token VARCHAR,       -- Mã phiên của thiết bị/khách
-    p_user_id UUID DEFAULT NULL,
+    p_user_id VARCHAR DEFAULT NULL,
     p_duration_minutes INTEGER DEFAULT 10
 )
 RETURNS BOOLEAN
@@ -412,7 +419,7 @@ BEGIN
           AND booking_date = slot_record.booking_date
           AND slot_index = slot_record.slot_index
           AND (
-              (p_user_id IS NOT NULL AND user_id = p_user_id)
+              (p_user_id IS NOT NULL AND user_id::text = p_user_id::text)
               OR (p_lock_token IS NOT NULL AND lock_token = p_lock_token)
               OR user_id IS NULL
           );
@@ -423,14 +430,14 @@ END;
 $$;
 
 
--- 6. CẬP NHẬT RPC: create_booking_transaction NGUYÊN TỬ (ATOMIC & CONCURRENCY-SAFE)
+-- 6. CẬP NHẬT RPC: create_booking_transaction NGUYÊN TỬ & ĐỐI SOÁT GIÁ SERVER-SIDE (ATOMIC & CONCURRENCY & PRICING-SAFE)
 CREATE OR REPLACE FUNCTION create_booking_transaction(
-    p_user_id UUID,
-    p_total_amount DECIMAL(10, 2),
-    p_customer_name VARCHAR,
-    p_customer_phone VARCHAR,
-    p_note TEXT,
-    p_slots JSONB, -- Mảng JSON chứa [{court_id, booking_date, slot_index}]
+    p_user_id VARCHAR DEFAULT NULL,
+    p_total_amount DECIMAL(10, 2) DEFAULT 0,
+    p_customer_name VARCHAR DEFAULT '',
+    p_customer_phone VARCHAR DEFAULT '',
+    p_note TEXT DEFAULT '',
+    p_slots JSONB DEFAULT '[]'::JSONB, -- Mảng JSON chứa [{court_id, booking_date, slot_index}]
     p_lock_token VARCHAR DEFAULT NULL
 )
 RETURNS JSONB
@@ -438,17 +445,34 @@ LANGUAGE plpgsql
 SECURITY DEFINER
 AS $$
 DECLARE
+    v_user_uuid UUID := NULL;
     v_booking_id UUID;
     v_payment_reference VARCHAR;
     v_short_id VARCHAR;
     slot_record RECORD;
     v_conflict_count INTEGER := 0;
     v_result JSONB;
+    v_court_rec RECORD;
+    v_base_minutes INTEGER;
+    v_slot_start_minutes INTEGER;
+    v_is_peak BOOLEAN;
+    v_is_weekend BOOLEAN;
+    v_hour_price DECIMAL(10, 2);
+    v_expected_total DECIMAL(10, 2) := 0.0;
+    v_final_amount DECIMAL(10, 2);
 BEGIN
-    -- 1. Kiểm tra Concurrency Race Condition:
-    -- Đảm bảo không có slot nào đã được đặt bởi đơn khác còn hiệu lực (is_active = true)
+    -- Chuyển đổi user_id sang UUID an toàn nếu là tài khoản đăng nhập
+    IF p_user_id IS NOT NULL AND p_user_id != '' AND p_user_id != 'guest_user' THEN
+        BEGIN
+            v_user_uuid := p_user_id::UUID;
+        EXCEPTION WHEN OTHERS THEN
+            v_user_uuid := NULL;
+        END;
+    END IF;
+    -- 1. Kiểm tra Concurrency Race Condition & Tính toán / Đối soát giá Server-side
     FOR slot_record IN SELECT * FROM jsonb_to_recordset(p_slots) AS x(court_id UUID, booking_date DATE, slot_index INTEGER)
     LOOP
+        -- a. Kiểm tra xung đột slot
         SELECT COUNT(*) INTO v_conflict_count
         FROM booking_slots bs
         JOIN bookings b ON b.id = bs.booking_id
@@ -461,29 +485,85 @@ BEGIN
         IF v_conflict_count > 0 THEN
             RAISE EXCEPTION 'Khung giờ này vừa được người khác đặt trước. Vui lòng chọn khung giờ khác!';
         END IF;
+
+        -- b. Lấy thông tin biểu giá từ bảng courts và giờ mở cửa cơ sở
+        SELECT c.price_per_hour, c.peak_price, c.apply_peak, c.weekend_surcharge, c.apply_weekend, v.open_time
+        INTO v_court_rec
+        FROM courts c
+        LEFT JOIN venues v ON v.id = c.venue_id
+        WHERE c.id = slot_record.court_id;
+
+        IF FOUND THEN
+            -- Tính phút bắt đầu của slot
+            IF v_court_rec.open_time IS NOT NULL AND v_court_rec.open_time != '' THEN
+                BEGIN
+                    v_base_minutes := EXTRACT(HOUR FROM v_court_rec.open_time::time) * 60 + EXTRACT(MINUTE FROM v_court_rec.open_time::time);
+                EXCEPTION WHEN OTHERS THEN
+                    v_base_minutes := 6 * 60;
+                END;
+            ELSE
+                v_base_minutes := 6 * 60;
+            END IF;
+
+            v_slot_start_minutes := v_base_minutes + slot_record.slot_index * 30;
+
+            -- Giờ cao điểm (16:00 - 22:00, tức 960 phút đến 1320 phút)
+            v_is_peak := (v_slot_start_minutes >= 960 AND v_slot_start_minutes < 1320);
+
+            -- Giá cơ sở theo giờ
+            v_hour_price := COALESCE(v_court_rec.price_per_hour, 140000.0);
+            IF v_is_peak AND COALESCE(v_court_rec.apply_peak, true) THEN
+                v_hour_price := COALESCE(v_court_rec.peak_price, ROUND(v_hour_price * 1.3));
+            END IF;
+
+            -- Kiểm tra ngày cuối tuần (Thứ 7 = 6, Chủ nhật = 7)
+            v_is_weekend := EXTRACT(ISODOW FROM slot_record.booking_date) IN (6, 7);
+            IF v_is_weekend AND COALESCE(v_court_rec.apply_weekend, true) THEN
+                v_hour_price := v_hour_price + COALESCE(v_court_rec.weekend_surcharge, 20000.0);
+            END IF;
+
+            -- Mỗi slot 30 phút = 0.5 giờ
+            v_expected_total := v_expected_total + (v_hour_price * 0.5);
+        ELSE
+            -- Dự phòng nếu không tìm thấy bản ghi sân
+            v_expected_total := v_expected_total + 70000.0;
+        END IF;
     END LOOP;
 
-    -- 2. Tạo bản ghi booking mới với trạng thái pending_payment
+    -- 2. Đối soát giá Server-side với số tiền do Client gửi lên
+    IF v_expected_total > 0 THEN
+        IF p_total_amount IS NULL OR p_total_amount <= 0 THEN
+            v_final_amount := v_expected_total;
+        ELSIF ABS(p_total_amount - v_expected_total) > 1000.0 THEN
+            RAISE EXCEPTION 'PRICE_MISMATCH: Biểu giá sân đã được cập nhật mới (%đ thay vì %đ). Vui lòng quay lại màn hình đặt sân để cập nhật giá mới!', v_expected_total, p_total_amount;
+        ELSE
+            v_final_amount := p_total_amount;
+        END IF;
+    ELSE
+        v_final_amount := COALESCE(p_total_amount, 0.0);
+    END IF;
+
+    -- 3. Tạo bản ghi booking mới với trạng thái pending_payment
     INSERT INTO bookings (user_id, total_amount, status, customer_name, customer_phone, note)
-    VALUES (p_user_id, p_total_amount, 'pending_payment', p_customer_name, p_customer_phone, p_note)
+    VALUES (v_user_uuid, v_final_amount, 'pending_payment', p_customer_name, p_customer_phone, p_note)
     RETURNING id INTO v_booking_id;
 
-    -- 3. Tạo mã payment_reference duy nhất (VD: FLEXI12345678)
+    -- 4. Tạo mã payment_reference duy nhất (VD: FLEXI12345678)
     v_short_id := upper(substring(v_booking_id::text from 29 for 8));
     v_payment_reference := 'FLEXI' || v_short_id;
 
-    -- 4. Tạo bản ghi payment tương ứng
+    -- 5. Tạo bản ghi payment tương ứng
     INSERT INTO payments (booking_id, amount, status, payment_reference)
-    VALUES (v_booking_id, p_total_amount, 'PENDING', v_payment_reference);
+    VALUES (v_booking_id, v_final_amount, 'PENDING', v_payment_reference);
 
-    -- 5. Thêm các slot đặt vào bảng booking_slots với is_active = true
+    -- 6. Thêm các slot đặt vào bảng booking_slots với is_active = true
     FOR slot_record IN SELECT * FROM jsonb_to_recordset(p_slots) AS x(court_id UUID, booking_date DATE, slot_index INTEGER)
     LOOP
         INSERT INTO booking_slots (booking_id, court_id, booking_date, slot_index, is_active)
         VALUES (v_booking_id, slot_record.court_id, slot_record.booking_date, slot_record.slot_index, true);
     END LOOP;
 
-    -- 6. Gia hạn lock trong 10 phút để người dùng quét QR không bị cướp
+    -- 7. Gia hạn lock trong 10 phút để người dùng quét QR không bị cướp
     FOR slot_record IN SELECT * FROM jsonb_to_recordset(p_slots) AS x(court_id UUID, booking_date DATE, slot_index INTEGER)
     LOOP
         UPDATE court_locks
@@ -493,10 +573,11 @@ BEGIN
           AND slot_index = slot_record.slot_index;
     END LOOP;
 
-    -- 7. Trả về kết quả cho client
+    -- 8. Trả về kết quả cho client
     v_result := jsonb_build_object(
         'booking_id', v_booking_id,
-        'payment_reference', v_payment_reference
+        'payment_reference', v_payment_reference,
+        'verified_total_amount', v_final_amount
     );
     
     RETURN v_result;
@@ -507,7 +588,7 @@ $$;
 
 
 -- 7. CẬP NHẬT RPC HỦY BOOKING KHI HẾT HẠN HOẶC NGƯỜI DÙNG BẤM HỦY
-CREATE OR REPLACE FUNCTION cancel_expired_booking(p_booking_id UUID)
+CREATE OR REPLACE FUNCTION cancel_expired_booking(p_booking_id VARCHAR)
 RETURNS VOID
 LANGUAGE plpgsql
 SECURITY DEFINER
@@ -516,14 +597,14 @@ BEGIN
     -- Cập nhật booking sang cancelled (Trigger sẽ tự động đặt booking_slots.is_active = false)
     UPDATE bookings 
     SET status = 'cancelled' 
-    WHERE id = p_booking_id AND status = 'pending_payment';
+    WHERE id::text = p_booking_id::text AND status = 'pending_payment';
     
     IF FOUND THEN
         -- Đảm bảo vô hiệu hóa slot
-        UPDATE booking_slots SET is_active = false WHERE booking_id = p_booking_id;
+        UPDATE booking_slots SET is_active = false WHERE booking_id::text = p_booking_id::text;
         
         -- Cập nhật trạng thái payment thành FAILED
-        UPDATE payments SET status = 'FAILED' WHERE booking_id = p_booking_id AND status = 'PENDING';
+        UPDATE payments SET status = 'FAILED' WHERE booking_id::text = p_booking_id::text AND status = 'PENDING';
     END IF;
 END;
 $$;

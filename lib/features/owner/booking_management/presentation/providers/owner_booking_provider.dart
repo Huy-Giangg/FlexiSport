@@ -87,12 +87,19 @@ class OwnerBookingProvider extends ChangeNotifier {
             schema: 'public',
             table: 'bookings',
             callback: (payload) {
+              final newRecord = payload.newRecord;
+              final status = newRecord['status']?.toString().toLowerCase();
+              // Khách hàng mới chỉ tạo mã QR và đang chờ thanh toán -> Bỏ qua, chưa hiển thị và chưa báo cho chủ sân
+              if (status == 'pending_payment') {
+                debugPrint("Realtime bookings INSERT: Bỏ qua đơn đang chờ quét QR thanh toán ($status)");
+                return;
+              }
+
               debugPrint("Realtime bookings INSERT detected: ${payload.eventType}");
               _loadBookings();
 
-              // Bắn thông báo đẩy cho Chủ sân
+              // Bắn thông báo đẩy cho Chủ sân (ví dụ đơn tạo trực tiếp/vãng lai)
               try {
-                final newRecord = payload.newRecord;
                 final customerName = newRecord['customer_name']?.toString() ?? 'Khách hàng';
                 final venueName = _selectedVenue?.name ?? 'Cơ sở của bạn';
                 final notificationId = (newRecord['id'] ?? DateTime.now().millisecondsSinceEpoch).hashCode & 0x7FFFFFFF;
@@ -116,15 +123,16 @@ class OwnerBookingProvider extends ChangeNotifier {
               debugPrint("Realtime bookings change detected: ${payload.eventType}");
               _loadBookings();
 
-              // Nếu đơn được thanh toán thành công (UPDATE sang completed/confirmed)
+              // Nếu đơn được thanh toán thành công (UPDATE từ pending_payment sang completed/confirmed)
               if (payload.eventType == PostgresChangeEvent.update) {
                 try {
                   final newRecord = payload.newRecord;
                   final oldRecord = payload.oldRecord;
-                  final newStatus = newRecord['status']?.toString();
-                  final oldStatus = oldRecord['status']?.toString();
+                  final newStatus = newRecord['status']?.toString().toLowerCase();
+                  final oldStatus = oldRecord['status']?.toString().toLowerCase();
 
-                  if ((newStatus == 'completed' || newStatus == 'confirmed') && oldStatus != 'completed' && oldStatus != 'confirmed') {
+                  if ((newStatus == 'completed' || newStatus == 'confirmed') && 
+                      oldStatus != 'completed' && oldStatus != 'confirmed') {
                     final customerName = newRecord['customer_name']?.toString() ?? 'Khách hàng';
                     final venueName = _selectedVenue?.name ?? 'Cơ sở của bạn';
                     final notificationId = (newRecord['id'] ?? DateTime.now().millisecondsSinceEpoch).hashCode & 0x7FFFFFFF;
@@ -133,7 +141,7 @@ class OwnerBookingProvider extends ChangeNotifier {
                       id: notificationId,
                       title: 'Đơn đặt sân đã thanh toán thành công! 🏸',
                       body: 'Khách $customerName vừa thanh toán thành công đơn đặt sân tại $venueName. Hãy kiểm tra ngay!',
-                      payload: jsonEncode({'route': '/owner/bookings'}),
+                      payload: jsonEncode({'route': '/booking-management'}),
                     );
                   }
                 } catch (e) {

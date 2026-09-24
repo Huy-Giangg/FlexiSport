@@ -25,13 +25,22 @@ class ChatVenueCard extends StatelessWidget {
 
     if (result == 'book') {
       if (context.mounted) {
-        context.push('/bookingpage?venueId=${venue.id}');
+        final router = GoRouter.of(context);
+        if (Navigator.of(context).canPop()) {
+          Navigator.of(context).pop();
+        }
+        router.push('/bookingpage?venueId=${venue.id}');
       }
     }
   }
 
   void _bookNow(BuildContext context) {
-    context.push('/bookingpage?venueId=${venue.id}');
+    final router = GoRouter.of(context);
+    context.read<MainPageProvider>().hideNavbar();
+    if (Navigator.of(context).canPop()) {
+      Navigator.of(context).pop();
+    }
+    router.push('/bookingpage?venueId=${venue.id}');
   }
 
   @override

@@ -659,6 +659,7 @@ class _VisualBookingPageState extends State<VisualBookingPage> {
                         // Load lại các khóa giữ chỗ, các sân đã đặt, sân bị khóa và sự kiện cho ngày mới
                         final provider = context.read<BookingProvider>();
                         provider.subscribeToCourtRealtime(widget.venueId, _formattedQueryDate);
+                        provider.loadCourts(widget.venueId);
                         provider.loadActiveLocks(widget.venueId, _formattedQueryDate);
                         provider.loadBookedSlots(widget.venueId, _formattedQueryDate);
                         provider.loadCourtBlocks(widget.venueId, _formattedQueryDate);

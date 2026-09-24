@@ -369,6 +369,9 @@ class _BookedDetailPageState extends State<BookedDetailPage> {
     if (status == 'cancelled') {
       statusText = 'Đã huỷ';
       statusTextColor = Colors.redAccent;
+    } else if (status == 'pending_payment') {
+      statusText = 'Chưa thanh toán';
+      statusTextColor = Colors.orangeAccent;
     } else if (hasPassed) {
       statusText = 'Thành công';
       statusTextColor = const Color(0xFF1EC391);

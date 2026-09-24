@@ -88,6 +88,7 @@ class _BookedCourtPageState extends State<BookedCourtPage> {
             .from('bookings')
             .select('*, booking_slots(*, courts(*, venues(*))), venue_reviews(id), matchmaking_posts(*, host:profiles!host_id ( name, phone ))')
             .eq('user_id', _userId)
+            .neq('status', 'pending_payment')
             .order('created_at', ascending: false);
       } else {
         final prefs = await SharedPreferences.getInstance();
@@ -99,6 +100,7 @@ class _BookedCourtPageState extends State<BookedCourtPage> {
               .from('bookings')
               .select('*, booking_slots(*, courts(*, venues(*))), venue_reviews(id), matchmaking_posts(*, host:profiles!host_id ( name, phone ))')
               .inFilter('id', guestBookingIds)
+              .neq('status', 'pending_payment')
               .order('created_at', ascending: false);
         }
       }
@@ -1512,6 +1514,10 @@ class _BookedCourtPageState extends State<BookedCourtPage> {
       statusText = 'Đã huỷ';
       statusTextColor = Colors.red;
       statusBgColor = const Color(0xFFFFEBEE);
+    } else if (status == 'pending_payment') {
+      statusText = 'Chưa thanh toán';
+      statusTextColor = Colors.orange;
+      statusBgColor = const Color(0xFFFFF3E0);
     } else if (hasPassed) {
       statusText = 'Thành công';
       statusTextColor = const Color(0xFF006D38);

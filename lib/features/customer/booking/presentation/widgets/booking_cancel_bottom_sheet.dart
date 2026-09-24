@@ -218,7 +218,7 @@ class _BookingCancelBottomSheetState extends State<BookingCancelBottomSheet> {
                 title: "Hủy sát giờ chơi (< 2 giờ)",
                 rate: "Không hoàn (0%)",
                 color: Colors.red.shade700,
-                description: "Khóa hủy trực tuyến. Quý khách vui lòng liên hệ hotline cơ sở để được hỗ trợ.",
+                description: "Vẫn cho phép hủy đơn trực tuyến để giải phóng sân cho người khác, nhưng không được hoàn lại tiền.",
               ),
               const SizedBox(height: 14),
               Container(
@@ -761,306 +761,308 @@ class _BookingCancelBottomSheetState extends State<BookingCancelBottomSheet> {
             ),
             const SizedBox(height: 16),
 
-            // TRƯỜNG HỢP SÁT GIỜ CHƠI (< 2 TIẾNG): KHÓA HỦY ONLINE
+            // TRƯỜNG HỢP SÁT GIỜ CHƠI (< 2 TIẾNG): CẢNH BÁO KHÔNG ĐƯỢC HOÀN TIỀN
             if (isTooLateToCancel) ...[
               Container(
                 padding: const EdgeInsets.all(14),
                 decoration: BoxDecoration(
-                  color: Colors.amber.shade50,
+                  color: Colors.red.shade50,
                   borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: Colors.amber.shade300),
+                  border: Border.all(color: Colors.red.shade200),
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Row(
                       children: [
-                        const Icon(Icons.warning_amber_rounded, color: Colors.amber, size: 20),
+                        const Icon(Icons.warning_amber_rounded, color: Colors.red, size: 20),
                         const SizedBox(width: 8),
-                        Text(
-                          "Không thể hủy online sát giờ chơi",
-                          style: GoogleFonts.lexend(
-                            fontSize: 13,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.amber.shade900,
+                        Expanded(
+                          child: Text(
+                            "Hủy sát giờ chơi (< 2 giờ) - Không hoàn tiền",
+                            style: GoogleFonts.lexend(
+                              fontSize: 13,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.red.shade900,
+                            ),
                           ),
                         ),
                       ],
                     ),
-                    const SizedBox(height: 8),
+                    const SizedBox(height: 6),
                     Text(
-                      "Theo quy định của hệ thống, các ca đặt trong vòng 2 tiếng trước giờ bắt đầu không thể tự hủy trên ứng dụng để đảm bảo quyền lợi vận hành sân.",
-                      style: GoogleFonts.lexend(fontSize: 12, color: Colors.amber.shade900, height: 1.4),
+                      "Đơn đặt của bạn chỉ còn ít hơn 2 giờ trước khi bắt đầu. Theo chính sách của hệ thống, bạn sẽ KHÔNG được hoàn tiền (0%) khi hủy đơn lúc này. Bạn vẫn có thể hủy để giải phóng sân cho người khác nếu không thể đến chơi.",
+                      style: GoogleFonts.lexend(fontSize: 12, color: Colors.red.shade900, height: 1.4),
                     ),
-                    const SizedBox(height: 8),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+            ],
+
+            // 3. THÔNG TIN TÀI KHOẢN NHẬN TIỀN HOÀN (BẮT BUỘC KHI CÓ TIỀN HOÀN > 0)
+            if (refundAmount > 0) ...[
+              Container(
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF9FAFB),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: Colors.grey.shade200),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        const Icon(Icons.account_balance_rounded, size: 16, color: Color(0xFF006D38)),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            "TÀI KHOẢN NHẬN TIỀN HOÀN (BẮT BUỘC)",
+                            style: GoogleFonts.lexend(
+                              fontSize: 11,
+                              fontWeight: FontWeight.bold,
+                              color: const Color(0xFF006D38),
+                              letterSpacing: 0.5,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
                     Text(
-                      "Vui lòng liên hệ trực tiếp số điện thoại/hotline của cơ sở để được hỗ trợ:",
-                      style: GoogleFonts.lexend(fontSize: 12, color: Colors.grey.shade800),
+                      "Vui lòng nhập chính xác để hệ thống/chủ sân chuyển tiền hoàn (1-3 ngày làm việc):",
+                      style: GoogleFonts.lexend(fontSize: 11, color: Colors.grey.shade600),
                     ),
                     const SizedBox(height: 10),
-                    InkWell(
-                      onTap: () {
-                        Clipboard.setData(ClipboardData(text: venuePhone));
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text("Đã sao chép SĐT cơ sở: $venuePhone", style: GoogleFonts.lexend()),
-                            duration: const Duration(seconds: 2),
-                          ),
-                        );
-                      },
-                      borderRadius: BorderRadius.circular(8),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: Colors.amber.shade400),
+                    // Dropdown Ngân hàng
+                    Text("Ngân hàng nhận tiền *", style: GoogleFonts.lexend(fontSize: 11, fontWeight: FontWeight.w600, color: Colors.grey.shade700)),
+                    const SizedBox(height: 4),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: Colors.grey.shade300),
+                      ),
+                      child: DropdownButtonHideUnderline(
+                        child: DropdownButton<String>(
+                          value: _selectedBank,
+                          isExpanded: true,
+                          style: GoogleFonts.lexend(fontSize: 13, color: Colors.black87),
+                          items: _bankList.map((b) => DropdownMenuItem(value: b, child: Text(b))).toList(),
+                          onChanged: (val) {
+                            if (val != null) {
+                              setState(() => _selectedBank = val);
+                            }
+                          },
                         ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            const Icon(Icons.phone_rounded, color: Color(0xFF006D38), size: 16),
-                            const SizedBox(width: 8),
-                            Text(
-                              "Hotline sân: $venuePhone",
-                              style: GoogleFonts.lexend(fontSize: 13, fontWeight: FontWeight.bold, color: const Color(0xFF006D38)),
-                            ),
-                            const SizedBox(width: 8),
-                            const Icon(Icons.copy_rounded, size: 14, color: Colors.grey),
-                          ],
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    // Ô nhập Số tài khoản
+                    Text("Số tài khoản nhận tiền *", style: GoogleFonts.lexend(fontSize: 11, fontWeight: FontWeight.w600, color: Colors.grey.shade700)),
+                    const SizedBox(height: 4),
+                    TextField(
+                      controller: _bankAccountController,
+                      keyboardType: TextInputType.number,
+                      style: GoogleFonts.lexend(fontSize: 13),
+                      decoration: InputDecoration(
+                        hintText: "Nhập số tài khoản ngân hàng...",
+                        filled: true,
+                        fillColor: Colors.white,
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10),
+                          borderSide: BorderSide(color: Colors.grey.shade300),
                         ),
+                        prefixIcon: const Icon(Icons.credit_card_rounded, size: 18),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    // Ô nhập Tên chủ tài khoản
+                    Text("Tên chủ tài khoản *", style: GoogleFonts.lexend(fontSize: 11, fontWeight: FontWeight.w600, color: Colors.grey.shade700)),
+                    const SizedBox(height: 4),
+                    TextField(
+                      controller: _bankHolderController,
+                      textCapitalization: TextCapitalization.characters,
+                      style: GoogleFonts.lexend(fontSize: 13, fontWeight: FontWeight.w600),
+                      decoration: InputDecoration(
+                        hintText: "Tên chủ tài khoản (viết hoa không dấu)...",
+                        filled: true,
+                        fillColor: Colors.white,
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10),
+                          borderSide: BorderSide(color: Colors.grey.shade300),
+                        ),
+                        prefixIcon: const Icon(Icons.person_outline_rounded, size: 18),
                       ),
                     ),
                   ],
                 ),
               ),
-              const SizedBox(height: 20),
-              SizedBox(
-                width: double.infinity,
-                child: OutlinedButton(
-                  onPressed: () => Navigator.of(context).pop(),
-                  style: OutlinedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  ),
-                  child: Text("Đã hiểu & Đóng", style: GoogleFonts.lexend(fontWeight: FontWeight.bold)),
-                ),
+              const SizedBox(height: 16),
+            ],
+
+            // 4. LÝ DO HỦY ĐẶT SÂN
+            Text(
+              "LÝ DO HỦY ĐẶT SÂN",
+              style: GoogleFonts.lexend(
+                fontSize: 12,
+                fontWeight: FontWeight.bold,
+                color: Colors.grey.shade700,
+                letterSpacing: 0.5,
               ),
-            ]
-            // TRƯỜNG HỢP ĐỦ ĐIỀU KIỆN HỦY
-            else ...[
-              // 3. THÔNG TIN TÀI KHOẢN NHẬN TIỀN HOÀN (NẾU CÓ TIỀN HOÀN > 0)
-              if (refundAmount > 0) ...[
-                Container(
-                  padding: const EdgeInsets.all(14),
+            ),
+            const SizedBox(height: 8),
+
+            // Danh sách chọn lý do
+            ..._quickReasons.map((reason) {
+              final isSelected = _selectedReason == reason;
+              return InkWell(
+                onTap: () {
+                  setState(() {
+                    _selectedReason = reason;
+                  });
+                },
+                borderRadius: BorderRadius.circular(10),
+                child: Container(
+                  margin: const EdgeInsets.only(bottom: 8),
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                   decoration: BoxDecoration(
-                    color: const Color(0xFFF9FAFB),
-                    borderRadius: BorderRadius.circular(14),
-                    border: Border.all(color: Colors.grey.shade200),
+                    color: isSelected ? const Color(0xFFF0FDF4) : const Color(0xFFF9FAFB),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(
+                      color: isSelected ? const Color(0xFF006D38) : Colors.grey.shade200,
+                      width: isSelected ? 1.5 : 1.0,
+                    ),
                   ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                  child: Row(
                     children: [
-                      Row(
-                        children: [
-                          const Icon(Icons.account_balance_rounded, size: 16, color: Color(0xFF006D38)),
-                          const SizedBox(width: 8),
-                          Text(
-                            "THÔNG TIN NHẬN TIỀN HOÀN (1-3 ngày)",
-                            style: GoogleFonts.lexend(
-                              fontSize: 11,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.grey.shade700,
-                              letterSpacing: 0.5,
-                            ),
-                          ),
-                        ],
+                      Icon(
+                        isSelected ? Icons.radio_button_checked : Icons.radio_button_off,
+                        size: 18,
+                        color: isSelected ? const Color(0xFF006D38) : Colors.grey,
                       ),
-                      const SizedBox(height: 10),
-                      // Dropdown Ngân hàng
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 12),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(10),
-                          border: Border.all(color: Colors.grey.shade300),
-                        ),
-                        child: DropdownButtonHideUnderline(
-                          child: DropdownButton<String>(
-                            value: _selectedBank,
-                            isExpanded: true,
-                            style: GoogleFonts.lexend(fontSize: 13, color: Colors.black87),
-                            items: _bankList.map((b) => DropdownMenuItem(value: b, child: Text(b))).toList(),
-                            onChanged: (val) {
-                              if (val != null) {
-                                setState(() => _selectedBank = val);
-                              }
-                            },
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          reason,
+                          style: GoogleFonts.lexend(
+                            fontSize: 13,
+                            fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+                            color: isSelected ? const Color(0xFF006D38) : Colors.black87,
                           ),
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      // Ô nhập Số tài khoản
-                      TextField(
-                        controller: _bankAccountController,
-                        keyboardType: TextInputType.number,
-                        style: GoogleFonts.lexend(fontSize: 13),
-                        decoration: InputDecoration(
-                          hintText: "Nhập số tài khoản ngân hàng nhận tiền...",
-                          filled: true,
-                          fillColor: Colors.white,
-                          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(10),
-                            borderSide: BorderSide(color: Colors.grey.shade300),
-                          ),
-                          prefixIcon: const Icon(Icons.credit_card_rounded, size: 18),
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      // Ô nhập Tên chủ tài khoản
-                      TextField(
-                        controller: _bankHolderController,
-                        textCapitalization: TextCapitalization.characters,
-                        style: GoogleFonts.lexend(fontSize: 13, fontWeight: FontWeight.w600),
-                        decoration: InputDecoration(
-                          hintText: "Tên chủ tài khoản (viết hoa không dấu)...",
-                          filled: true,
-                          fillColor: Colors.white,
-                          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(10),
-                            borderSide: BorderSide(color: Colors.grey.shade300),
-                          ),
-                          prefixIcon: const Icon(Icons.person_outline_rounded, size: 18),
                         ),
                       ),
                     ],
                   ),
                 ),
-                const SizedBox(height: 16),
-              ],
+              );
+            }),
 
-              // 4. LÝ DO HỦY ĐẶT SÂN
-              Text(
-                "LÝ DO HỦY ĐẶT SÂN",
-                style: GoogleFonts.lexend(
-                  fontSize: 12,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.grey.shade700,
-                  letterSpacing: 0.5,
-                ),
-              ),
-              const SizedBox(height: 8),
-
-              // Danh sách chọn lý do
-              ..._quickReasons.map((reason) {
-                final isSelected = _selectedReason == reason;
-                return InkWell(
-                  onTap: () {
-                    setState(() {
-                      _selectedReason = reason;
-                    });
-                  },
-                  borderRadius: BorderRadius.circular(10),
-                  child: Container(
-                    margin: const EdgeInsets.only(bottom: 8),
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                    decoration: BoxDecoration(
-                      color: isSelected ? const Color(0xFFF0FDF4) : const Color(0xFFF9FAFB),
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(
-                        color: isSelected ? const Color(0xFF006D38) : Colors.grey.shade200,
-                        width: isSelected ? 1.5 : 1.0,
-                      ),
-                    ),
-                    child: Row(
-                      children: [
-                        Icon(
-                          isSelected ? Icons.radio_button_checked : Icons.radio_button_off,
-                          size: 18,
-                          color: isSelected ? const Color(0xFF006D38) : Colors.grey,
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: Text(
-                            reason,
-                            style: GoogleFonts.lexend(
-                              fontSize: 13,
-                              fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
-                              color: isSelected ? const Color(0xFF006D38) : Colors.black87,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                );
-              }),
-
-              if (_selectedReason == 'Lý do cá nhân khác') ...[
-                const SizedBox(height: 4),
-                TextField(
-                  controller: _customReasonController,
-                  maxLines: 2,
-                  style: GoogleFonts.lexend(fontSize: 13),
-                  decoration: InputDecoration(
-                    hintText: "Nhập lý do chi tiết của bạn...",
-                    filled: true,
-                    fillColor: const Color(0xFFF9FAFB),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(10),
-                      borderSide: BorderSide(color: Colors.grey.shade300),
-                    ),
+            if (_selectedReason == 'Lý do cá nhân khác') ...[
+              const SizedBox(height: 4),
+              TextField(
+                controller: _customReasonController,
+                maxLines: 2,
+                style: GoogleFonts.lexend(fontSize: 13),
+                decoration: InputDecoration(
+                  hintText: "Nhập lý do chi tiết của bạn...",
+                  filled: true,
+                  fillColor: const Color(0xFFF9FAFB),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                    borderSide: BorderSide(color: Colors.grey.shade300),
                   ),
                 ),
-              ],
-              const SizedBox(height: 20),
-
-              // Action buttons
-              Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton(
-                      onPressed: _isLoading ? null : () => Navigator.of(context).pop(),
-                      style: OutlinedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                      ),
-                      child: Text("Giữ lại đơn", style: GoogleFonts.lexend(color: Colors.grey.shade700)),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: ElevatedButton(
-                      onPressed: _isLoading
-                          ? null
-                          : () {
-                              final finalReason = _selectedReason == 'Lý do cá nhân khác' &&
-                                      _customReasonController.text.trim().isNotEmpty
-                                  ? _customReasonController.text.trim()
-                                  : _selectedReason;
-                              _handleCancelBooking(finalReason, venueName, refundAmount);
-                            },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.red,
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                        elevation: 0,
-                      ),
-                      child: _isLoading
-                          ? const SizedBox(
-                              width: 20,
-                              height: 20,
-                              child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                            )
-                          : Text("Xác nhận hủy", style: GoogleFonts.lexend(fontWeight: FontWeight.bold)),
-                    ),
-                  ),
-                ],
               ),
             ],
+            const SizedBox(height: 20),
+
+            // Action buttons
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: _isLoading ? null : () => Navigator.of(context).pop(),
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                    child: Text("Giữ lại đơn", style: GoogleFonts.lexend(color: Colors.grey.shade700)),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: ElevatedButton(
+                    onPressed: _isLoading
+                        ? null
+                        : () {
+                            // Validation bắt buộc tài khoản nhận tiền hoàn nếu có hoàn tiền
+                            if (refundAmount > 0) {
+                              final acc = _bankAccountController.text.trim();
+                              final holder = _bankHolderController.text.trim();
+                              if (acc.isEmpty) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text("Vui lòng nhập Số tài khoản ngân hàng để nhận hoàn tiền!", style: GoogleFonts.lexend()),
+                                    backgroundColor: Colors.red.shade700,
+                                  ),
+                                );
+                                return;
+                              }
+                              if (acc.length < 5) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text("Số tài khoản ngân hàng phải có ít nhất 5 số!", style: GoogleFonts.lexend()),
+                                    backgroundColor: Colors.red.shade700,
+                                  ),
+                                );
+                                return;
+                              }
+                              if (holder.isEmpty) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text("Vui lòng nhập Tên chủ tài khoản ngân hàng!", style: GoogleFonts.lexend()),
+                                    backgroundColor: Colors.red.shade700,
+                                  ),
+                                );
+                                return;
+                              }
+                            }
+
+                            final finalReason = _selectedReason == 'Lý do cá nhân khác' &&
+                                    _customReasonController.text.trim().isNotEmpty
+                                ? _customReasonController.text.trim()
+                                : _selectedReason;
+                            _handleCancelBooking(finalReason, venueName, refundAmount);
+                          },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.red,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      elevation: 0,
+                    ),
+                    child: _isLoading
+                        ? const SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                          )
+                        : Text(
+                            refundAmount > 0 
+                                ? "Xác nhận hủy" 
+                                : "Hủy không hoàn tiền", 
+                            style: GoogleFonts.lexend(fontWeight: FontWeight.bold, fontSize: 13),
+                            textAlign: TextAlign.center,
+                          ),
+                  ),
+                ),
+              ],
+            ),
           ],
         ),
       ),

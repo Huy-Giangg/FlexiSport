@@ -124,6 +124,15 @@ class BookingProvider extends ChangeNotifier {
               loadBookedSlots(venueId, date);
             },
           )
+          .onPostgresChanges(
+            event: PostgresChangeEvent.all,
+            schema: 'public',
+            table: 'courts',
+            callback: (payload) {
+              debugPrint("Realtime courts change detected: ${payload.eventType}");
+              loadCourts(venueId);
+            },
+          )
           .subscribe();
     } catch (e) {
       debugPrint("Realtime subscription error in BookingProvider: $e");

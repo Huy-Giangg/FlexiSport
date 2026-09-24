@@ -182,19 +182,14 @@ class AiChatProvider extends ChangeNotifier {
       final idsStr = match.group(1) ?? '';
       final ids = idsStr.split(',').map((e) => e.trim()).where((e) => e.isNotEmpty).toList();
       for (final id in ids) {
-        final found = availableVenues.firstWhere(
-          (v) => v.id == id,
-          orElse: () => SportsComplexEntity(
-            id: '',
-            name: '',
-            address: '',
-            logoUrl: '',
-            rating: 0,
-            open_time: '',
-            close_time: '',
-          ),
-        );
-        if (found.id.isNotEmpty && !venues.any((v) => v.id == found.id)) {
+        SportsComplexEntity? found;
+        for (final v in availableVenues) {
+          if (v.id.trim().toLowerCase() == id.trim().toLowerCase()) {
+            found = v;
+            break;
+          }
+        }
+        if (found != null && !venues.any((v) => v.id == found!.id)) {
           venues.add(found);
         }
       }

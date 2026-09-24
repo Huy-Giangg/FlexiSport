@@ -390,6 +390,18 @@ class OwnerBookingCardWidget extends StatelessWidget {
                       child: Text("Duyệt đơn", style: GoogleFonts.lexend(fontSize: 12, fontWeight: FontWeight.bold)),
                     ),
                   ] else if (booking.isConfirmed) ...[
+                    OutlinedButton(
+                      onPressed: onCancel,
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: Colors.red,
+                        side: BorderSide(color: Colors.red.shade200),
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                        minimumSize: const Size(0, 32),
+                      ),
+                      child: Text("Hủy đơn", style: GoogleFonts.lexend(fontSize: 11)),
+                    ),
+                    const SizedBox(width: 6),
                     if (!booking.isPaid && onMarkPaid != null) ...[
                       OutlinedButton.icon(
                         onPressed: onMarkPaid,

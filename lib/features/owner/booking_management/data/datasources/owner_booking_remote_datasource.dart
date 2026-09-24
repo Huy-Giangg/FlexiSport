@@ -28,12 +28,13 @@ class OwnerBookingRemoteDataSource {
             .toList();
       } catch (_) {}
 
-      // 2. Query bookings có chứa booking_slots thuộc cơ sở này
+      // 2. Query bookings có chứa booking_slots thuộc cơ sở này (loại bỏ pending_payment)
       dynamic response;
       try {
         response = await supabaseClient
             .from('bookings')
             .select('*, booking_slots(*, courts(*, venues(*)))')
+            .neq('status', 'pending_payment')
             .order('created_at', ascending: false);
       } catch (e) {
         debugPrint("Lỗi truy vấn bookings: $e");
@@ -42,8 +43,11 @@ class OwnerBookingRemoteDataSource {
 
       final List<dynamic> list = response is List ? response : [];
 
-      // Lọc các booking liên quan đến venue này
+      // Lọc các booking liên quan đến venue này và bỏ qua đơn chưa thanh toán QR
       final filteredList = list.where((item) {
+        final status = item['status']?.toString().toLowerCase();
+        if (status == 'pending_payment') return false;
+
         final itemVenueId = item['venue_id']?.toString();
         if (itemVenueId == venueId) return true;
 

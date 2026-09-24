@@ -1,97 +1,17 @@
--- ==========================================
--- 1. Tạo bảng court_locks (Bảng giữ chỗ tạm thời trong 5 phút)
--- ==========================================
-CREATE TABLE IF NOT EXISTS court_locks (
-    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-    court_id UUID REFERENCES courts(id) ON DELETE CASCADE,
-    slot_index INTEGER NOT NULL,
-    booking_date DATE NOT NULL,
-    user_id UUID REFERENCES auth.users(id) ON DELETE SET NULL, -- Để NULL nếu là khách vãng lai
-    locked_until TIMESTAMP WITH TIME ZONE DEFAULT (NOW() + INTERVAL '5 minutes') NOT NULL,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL,
-    
-    -- Ràng buộc UNIQUE để ngăn chặn 2 người cùng giữ chỗ một sân vào một khung giờ
-    CONSTRAINT unique_court_lock UNIQUE (court_id, booking_date, slot_index)
-);
+-- ==============================================================================
+-- FIX LỖI PGRST203: FUNCTION OVERLOADING CHO create_booking_transaction
+-- Nguyên nhân: Trong Supabase đang tồn tại 2 hàm trùng tên với chữ ký tham số khác nhau:
+-- 1) create_booking_transaction(p_user_id uuid, ...) (Hàm cũ)
+-- 2) create_booking_transaction(p_user_id character varying, ..., p_lock_token ...) (Hàm mới)
+-- ==============================================================================
 
--- Bật Row Level Security (RLS) cho court_locks
-ALTER TABLE court_locks ENABLE ROW LEVEL SECURITY;
+-- 1. XÓA BỎ TẤT CẢ CÁC PHIÊN BẢN CŨ GÂY XUNG ĐỘT
+DROP FUNCTION IF EXISTS public.create_booking_transaction(uuid, numeric, character varying, character varying, text, jsonb);
+DROP FUNCTION IF EXISTS public.create_booking_transaction(varchar, numeric, varchar, varchar, text, jsonb);
+DROP FUNCTION IF EXISTS public.create_booking_transaction(varchar, numeric, varchar, varchar, text, jsonb, varchar);
 
--- Tạo các policy cho court_locks (ép kiểu ::text để tương thích tốt nhất)
-DROP POLICY IF EXISTS "Cho phép đọc locks công khai" ON court_locks;
-CREATE POLICY "Cho phép đọc locks công khai" ON court_locks 
-    FOR SELECT USING (true);
-
-DROP POLICY IF EXISTS "Cho phép người dùng tạo lock" ON court_locks;
-CREATE POLICY "Cho phép người dùng tạo lock" ON court_locks 
-    FOR INSERT WITH CHECK (auth.uid()::text = user_id::text OR user_id IS NULL);
-
-DROP POLICY IF EXISTS "Cho phép người dùng xóa lock" ON court_locks;
-CREATE POLICY "Cho phép người dùng xóa lock" ON court_locks 
-    FOR DELETE USING (auth.uid()::text = user_id::text OR user_id IS NULL);
-
-
--- ==========================================
--- 2. Cập nhật cấu trúc bảng bookings
--- ==========================================
-ALTER TABLE bookings 
-  ADD COLUMN IF NOT EXISTS customer_name VARCHAR(100),
-  ADD COLUMN IF NOT EXISTS customer_phone VARCHAR(20),
-  ADD COLUMN IF NOT EXISTS note TEXT;
-
--- Thay đổi giá trị mặc định của status thành pending_payment
-ALTER TABLE bookings ALTER COLUMN status SET DEFAULT 'pending_payment';
-
-
--- ==========================================
--- 3. Tạo bảng payments để lưu các giao dịch thanh toán VietQR
--- ==========================================
-CREATE TABLE IF NOT EXISTS payments (
-    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-    booking_id UUID NOT NULL REFERENCES bookings(id) ON DELETE CASCADE,
-    payment_method VARCHAR(50) DEFAULT 'VietQR' NOT NULL,
-    amount DECIMAL(10, 2) NOT NULL,
-    status VARCHAR(50) DEFAULT 'PENDING' NOT NULL, -- PENDING, SUCCESS, FAILED
-    payment_reference VARCHAR(50) UNIQUE NOT NULL, -- Nội dung chuyển khoản duy nhất (VD: FLEXI100045)
-    transaction_code VARCHAR(100) UNIQUE,          -- Mã tham chiếu giao dịch từ phía Ngân hàng (nếu có)
-    raw_callback_data JSONB,                       -- Lưu toàn bộ JSON payload từ webhook để đối soát
-    paid_at TIMESTAMP WITH TIME ZONE,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL
-);
-
--- Bật RLS cho payments
-ALTER TABLE payments ENABLE ROW LEVEL SECURITY;
-
--- Tạo các policy cho payments (ép kiểu ::text để tương thích tốt nhất)
-DROP POLICY IF EXISTS "Cho phép đọc payments cá nhân" ON payments;
-CREATE POLICY "Cho phép đọc payments cá nhân" ON payments 
-    FOR SELECT USING (
-        EXISTS (
-            SELECT 1 FROM bookings 
-            WHERE bookings.id::text = payments.booking_id::text 
-            AND (bookings.user_id::text = auth.uid()::text OR bookings.user_id IS NULL)
-        )
-    );
-
-
--- ==========================================
--- 4. Kích hoạt Realtime cho bảng bookings
--- ==========================================
-DO $$
-BEGIN
-    IF NOT EXISTS (
-        SELECT 1 FROM pg_publication_tables 
-        WHERE pubname = 'supabase_realtime' AND tablename = 'bookings'
-    ) THEN
-        ALTER PUBLICATION supabase_realtime ADD TABLE bookings;
-    END IF;
-END $$;
-
-
--- ==========================================
--- 5. Viết Stored Procedure (RPC) tạo Booking và Payment nguyên tử
--- ==========================================
-CREATE OR REPLACE FUNCTION create_booking_transaction(
+-- 2. TẠO LẠI PHIÊN BẢN CHUẨN DUY NHẤT HỖ TRỢ ĐẦY ĐỦ (GUEST USER + KHÓA ATOMIC + ĐỐI SOÁT GIÁ)
+CREATE OR REPLACE FUNCTION public.create_booking_transaction(
     p_user_id VARCHAR DEFAULT NULL,
     p_total_amount DECIMAL(10, 2) DEFAULT 0,
     p_customer_name VARCHAR DEFAULT '',
@@ -129,6 +49,7 @@ BEGIN
             v_user_uuid := NULL;
         END;
     END IF;
+
     -- 1. Kiểm tra Concurrency Race Condition & Tính toán / Đối soát giá Server-side
     FOR slot_record IN SELECT * FROM jsonb_to_recordset(p_slots) AS x(court_id UUID, booking_date DATE, slot_index INTEGER)
     LOOP
@@ -246,57 +167,47 @@ EXCEPTION WHEN OTHERS THEN
 END;
 $$;
 
+-- 3. XÓA BỎ VÀ TẠO LẠI RPC: cancel_expired_booking (GIẢI PHÓNG TOÀN DIỆN LOCK VÀ SLOT KHI HỦY HOẶC THOÁT THANH TOÁN)
+DROP FUNCTION IF EXISTS public.cancel_expired_booking(uuid);
+DROP FUNCTION IF EXISTS public.cancel_expired_booking(varchar);
 
--- ==========================================
--- 6. Viết Stored Procedure (RPC) hủy Booking khi hết giờ thanh toán
--- ==========================================
-CREATE OR REPLACE FUNCTION cancel_expired_booking(p_booking_id VARCHAR)
+CREATE OR REPLACE FUNCTION public.cancel_expired_booking(p_booking_id VARCHAR)
 RETURNS VOID
 LANGUAGE plpgsql
 SECURITY DEFINER
 AS $$
+DECLARE
+    v_b_id UUID;
 BEGIN
-    -- Chỉ cho phép hủy nếu booking đang ở trạng thái pending_payment
+    BEGIN
+        v_b_id := p_booking_id::UUID;
+    EXCEPTION WHEN OTHERS THEN
+        v_b_id := NULL;
+    END;
+
+    -- 1. Giải phóng ngay các ô khóa court_locks tương ứng với các slot của đơn này
+    DELETE FROM court_locks 
+    WHERE (court_id, booking_date, slot_index) IN (
+        SELECT court_id, booking_date, slot_index 
+        FROM booking_slots 
+        WHERE booking_id::text = p_booking_id::text OR (v_b_id IS NOT NULL AND booking_id = v_b_id)
+    );
+
+    -- 2. Xóa các slot đặt khỏi booking_slots để giải phóng lưới trực quan ngay lập tức
+    DELETE FROM booking_slots 
+    WHERE booking_id::text = p_booking_id::text OR (v_b_id IS NOT NULL AND booking_id = v_b_id);
+
+    -- 3. Cập nhật trạng thái booking sang cancelled
     UPDATE bookings 
     SET status = 'cancelled' 
-    WHERE id::text = p_booking_id::text AND status = 'pending_payment';
-    
-    IF FOUND THEN
-        -- Xóa các slot đặt tương ứng trong booking_slots để giải phóng sân
-        DELETE FROM booking_slots WHERE booking_id::text = p_booking_id::text;
-        
-        -- Cập nhật trạng thái payment thành FAILED
-        UPDATE payments SET status = 'FAILED' WHERE booking_id::text = p_booking_id::text AND status = 'PENDING';
-    END IF;
+    WHERE (id::text = p_booking_id::text OR (v_b_id IS NOT NULL AND id = v_b_id)) 
+      AND status = 'pending_payment';
+
+    -- 4. Cập nhật trạng thái thanh toán sang FAILED
+    UPDATE payments 
+    SET status = 'FAILED' 
+    WHERE (booking_id::text = p_booking_id::text OR (v_b_id IS NOT NULL AND booking_id = v_b_id)) 
+      AND status = 'PENDING';
 END;
 $$;
 
-
--- ==========================================
--- 7. Trigger tự động dọn dẹp các booking quá hạn (Tránh rác khi tắt App đột ngột)
--- ==========================================
-CREATE OR REPLACE FUNCTION cleanup_expired_bookings_trigger()
-RETURNS TRIGGER AS $$
-BEGIN
-    -- Tìm và cập nhật các booking ở trạng thái 'pending_payment' quá 5 phút thành 'cancelled'
-    UPDATE bookings 
-    SET status = 'cancelled' 
-    WHERE status = 'pending_payment' 
-      AND created_at < NOW() - INTERVAL '5 minutes';
-
-    -- Xóa các slot đặt tương ứng của các booking đã bị hủy để giải phóng sân trống
-    DELETE FROM booking_slots 
-    WHERE booking_id IN (
-        SELECT id FROM bookings WHERE status = 'cancelled'
-    );
-    
-    RETURN NEW;
-END;
-$$ LANGUAGE plpgsql;
-
--- Tạo trigger trên bảng court_locks (chạy trước khi có người giữ chỗ mới để giải phóng sân quá hạn)
-DROP TRIGGER IF EXISTS trg_cleanup_expired_bookings ON court_locks;
-CREATE TRIGGER trg_cleanup_expired_bookings
-BEFORE INSERT ON court_locks
-FOR EACH ROW
-EXECUTE FUNCTION cleanup_expired_bookings_trigger();

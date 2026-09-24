@@ -321,6 +321,7 @@ class _BookingTimelineWidgetState extends State<BookingTimelineWidget> {
         String statusLabel = 'Chờ xác nhận';
         if (status == 'confirmed') statusLabel = 'Đã xác nhận';
         if (status == 'completed') statusLabel = 'Hoàn thành';
+        if (status == 'pending_payment') statusLabel = 'Đang giữ chỗ (Chờ quét QR)';
         if (status == 'cancelled') return;
 
         items.add(_ScheduleItem(
